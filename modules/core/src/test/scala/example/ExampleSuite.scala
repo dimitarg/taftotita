@@ -12,4 +12,3 @@ object ExampleSuite extends Suite:
       expect(1 === 1)
     }
   )
-end ExampleSuite
