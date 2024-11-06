@@ -14,4 +14,4 @@ final case class DatabaseConfig(
     userName: UserName,
     password: Password
 ):
-  def jdbcUrl: String = s"jdbc:postgresql://${host.value}/${database.value}"
+  def jdbcUrl: String = s"jdbc:postgresql://${host.value}:${port.value}/${database.value}"
