@@ -9,15 +9,14 @@ lazy val core = module("core")
     libraryDependencies ++= Seq(
       "co.fs2" %% "fs2-io" % "3.11.0",
       "io.github.iltotore" %% "iron" % "2.6.0",
+      // we depend on ciris in core because domain data types reuse `Secret` datatype.
+      "is.cir" %% "ciris" % "3.6.0",
       "io.github.dimitarg"  %%  "weaver-test-extra" % "0.5.11" % "test"
     )
   )
 
 lazy val config = module("config")
   .dependsOn(core)
-  .settings(libraryDependencies ++= Seq(
-    "is.cir" %% "ciris" % "3.6.0"
-  ))
 
 lazy val migrations = module("migrations")
   .dependsOn(config)
@@ -28,6 +27,14 @@ lazy val migrations = module("migrations")
     )
   )
 
+lazy val persist = module("persist")
+  .dependsOn(config)
+  .settings(
+    libraryDependencies ++= Seq(
+      "org.tpolecat" %% "skunk-core" % "0.6.4"
+    )
+  )
+
 lazy val root = (project in file("."))
-  .aggregate(core, migrations, config)
+  .aggregate(core, migrations, config, persist)
 
