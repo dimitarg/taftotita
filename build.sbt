@@ -3,6 +3,7 @@ ThisBuild / version      := "0.1.0-SNAPSHOT"
 ThisBuild / scalaVersion := "3.3.4"
 
 val testcontainersScalaVersion = "0.41.4"
+val ironVersion = "2.6.0"
 
 def module(name: String): Project = Project(id = s"tafto-${name}",  base = file(s"modules/$name"))
   .settings(
@@ -24,8 +25,8 @@ lazy val core = module("core")
   .dependsOn(logging)
   .settings(
     libraryDependencies ++= Seq(
-      "io.github.iltotore" %% "iron" % "2.6.0",
-      "io.github.iltotore" %% "iron-cats" % "2.6.0",
+      "io.github.iltotore" %% "iron" % ironVersion,
+      "io.github.iltotore" %% "iron-cats" % ironVersion,
       // we depend on ciris in core because domain data types reuse `Secret` datatype.
       "is.cir" %% "ciris" % "3.6.0",
     )
@@ -51,7 +52,8 @@ lazy val persist = module("persist")
   )
   .settings(
     libraryDependencies ++= Seq(
-      "org.tpolecat" %% "skunk-core" % "0.6.4"
+      "org.tpolecat" %% "skunk-core" % "0.6.4",
+      "io.github.iltotore" %% "iron-skunk" % ironVersion,
     )
   )
 
