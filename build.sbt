@@ -11,10 +11,19 @@ def module(name: String): Project = Project(id = s"tafto-${name}",  base = file(
     )
   )
 
-lazy val core = module("core")
+lazy val logging = module("logging")
   .settings(
     libraryDependencies ++= Seq(
       "co.fs2" %% "fs2-io" % "3.11.0",
+      "dev.scalafreaks" %% "odin-core" % "0.15.0",
+      "dev.scalafreaks" %% "odin-slf4j-provider" % "0.15.0"
+    )
+  )
+
+lazy val core = module("core")
+  .dependsOn(logging)
+  .settings(
+    libraryDependencies ++= Seq(
       "io.github.iltotore" %% "iron" % "2.6.0",
       "io.github.iltotore" %% "iron-cats" % "2.6.0",
       // we depend on ciris in core because domain data types reuse `Secret` datatype.
