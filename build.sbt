@@ -77,6 +77,7 @@ lazy val restServer = module("rest-server")
     libraryDependencies ++= Seq(
         "org.http4s" %% "http4s-ember-server" % http4sVersion,
         "org.http4s" %% "http4s-dsl"          % http4sVersion,
+        "org.endpoints4s" %% "http4s-server" % "11.0.1",
     )
   )
 
@@ -90,6 +91,9 @@ lazy val testContainers = module("testcontainers")
     )
   )
 
+lazy val localDev = module("local-dev")
+  .dependsOn(migrations, persist, restServer, testContainers)
+
 lazy val root = (project in file("."))
-  .aggregate(logging, core, migrations, config, persist, testContainers, restApi, restServer)
+  .aggregate(logging, core, migrations, config, persist, testContainers, restApi, restServer, localDev)
 

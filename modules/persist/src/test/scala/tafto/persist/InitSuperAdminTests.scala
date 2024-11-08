@@ -6,24 +6,14 @@ import io.github.iltotore.iron.*
 import io.github.iltotore.iron.cats.given
 import fs2.*
 import weaver.pure.*
-import tafto.testcontainers.Postgres
 
-import natchez.Trace.Implicits.noop
 import tafto.domain.*
 import tafto.util.NonEmptyString
 import ciris.Secret
-import tafto.db.DatabaseMigrator
 
-object PgUserRepoTests extends Suite {
+object InitSuperAdminTests:
 
-  val dbResource = for {
-    pg <- Postgres.make
-    config = pg.databaseConfig
-    db <- Database.make(config)
-    _ <- Resource.eval(DatabaseMigrator.migrate(config))
-  } yield db
-
-  override def suitesStream: Stream[IO, Test] = Stream.resource(dbResource).flatMap { db =>
+  def tests(db: Database[IO]): Stream[IO, Test] =
 
     val repo = PgUserRepo(db)
 
@@ -45,6 +35,3 @@ object PgUserRepoTests extends Suite {
         }
       )
     )
-  }
-
-}
