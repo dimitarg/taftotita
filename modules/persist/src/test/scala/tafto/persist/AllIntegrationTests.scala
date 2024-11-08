@@ -11,7 +11,7 @@ import weaver.pure.*
 object AllIntegrationTests extends Suite:
 
   val dbResource: Resource[IO, Database[IO]] = for {
-    pg <- Postgres.make
+    pg <- Postgres.make(dataBind = None)
     config = pg.databaseConfig
     db <- Database.make(config)
     _ <- Resource.eval(DatabaseMigrator.migrate(config))

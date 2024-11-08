@@ -1,5 +1,8 @@
 package tafto
 
+import cats.implicits._
+import cats.MonadThrow
+
 import io.github.iltotore.iron.*
 import io.github.iltotore.iron.constraint.all.*
 
@@ -13,3 +16,6 @@ package object util:
   type ValidPortRange = GreaterEqual[0] & LessEqual[65535]
   opaque type Port = Int :| ValidPortRange
   object Port extends RefinedTypeOps[Int, ValidPortRange, Port]
+
+  def safeAssert[F[_]: MonadThrow](cond: Boolean, error: => String): F[Unit] =
+    if (cond) ().pure else MonadThrow[F].raiseError(new RuntimeException(error))

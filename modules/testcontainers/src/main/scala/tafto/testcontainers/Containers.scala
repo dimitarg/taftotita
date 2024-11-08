@@ -1,12 +1,26 @@
 package tafto.testcontainers
 
+import tafto.util.safeAssert
+import cats.implicits.*
 import cats.effect.*
+import fs2.io.file.*
 
 final case class Containers(
     postgres: Postgres
 )
 
 object Containers:
-  def make: Resource[IO, Containers] = for {
-    pg <- Postgres.make
+  def make(config: ContainersConfig): Resource[IO, Containers] = for {
+    pgBind <- Resource.eval(config.pgCache.traverse(prepare))
+    // _ <- Resource.eval(IO.raiseError(new RuntimeException("boom")))
+    pg <- Postgres.make(pgBind)
   } yield Containers(pg)
+
+  def prepare(bind: FsBind): IO[ValidHostFsBind] = for {
+    home <- Files[IO].userHome
+    _ <- safeAssert[IO](!bind.hostPath.isAbsolute, s"Expected relative path, got ${bind.hostPath}")
+    hostPath = home / bind.hostPath
+    alreadyExists <- Files[IO].exists(hostPath)
+    _ <- Files[IO].createDirectories(hostPath)
+
+  } yield ValidHostFsBind(hostPath = hostPath, containerPath = bind.containerPath, isNewlyCreated = !alreadyExists)
