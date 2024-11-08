@@ -4,6 +4,10 @@ ThisBuild / scalaVersion := "3.3.4"
 
 val testcontainersScalaVersion = "0.41.4"
 val ironVersion = "2.6.0"
+val http4sVersion = "0.23.29"
+val endpointsVersion = "1.12.1"
+val endpointsOpenApiVersion = "5.0.1"
+
 
 def module(name: String): Project = Project(id = s"tafto-${name}",  base = file(s"modules/$name"))
   .settings(
@@ -57,6 +61,27 @@ lazy val persist = module("persist")
     )
   )
 
+lazy val restApi = module("rest-api")
+  .dependsOn(core)
+  .settings(
+    libraryDependencies ++= Seq(
+      "org.endpoints4s" %% "algebra" % endpointsVersion,
+      "org.endpoints4s" %% "json-schema-generic" % endpointsVersion,
+      "org.endpoints4s" %% "openapi" % endpointsOpenApiVersion,
+    )
+  )
+
+lazy val restServer = module("rest-server")
+  .dependsOn(restApi)
+  .settings(
+    libraryDependencies ++= Seq(
+        "org.http4s" %% "http4s-ember-server" % http4sVersion,
+        "org.http4s" %% "http4s-dsl"          % http4sVersion,
+    )
+  )
+
+
+
 lazy val testContainers = module("testcontainers")
   .dependsOn(config)
   .settings(
@@ -66,5 +91,5 @@ lazy val testContainers = module("testcontainers")
   )
 
 lazy val root = (project in file("."))
-  .aggregate(core, migrations, config, persist, testContainers)
+  .aggregate(logging, core, migrations, config, persist, testContainers, restApi, restServer)
 

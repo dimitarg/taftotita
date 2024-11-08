@@ -7,28 +7,27 @@ import skunk.implicits.*
 import skunk.codec.all as skunkCodecs
 import cats.implicits.*
 import cats.effect.MonadCancelThrow
-import cats.Applicative
 
 final case class PgUserRepo[F[_]: MonadCancelThrow](database: Database[F]) extends UserRepo[F]:
   import PgUserRepo.*
   override def initSuperAdmin(email: Email, fullName: Option[NonEmptyString], password: UserPassword): F[Boolean] =
     database.transact { session =>
       for {
-        alreadyExists <- session.unique(Queries.roleExists)(UserRole.SuperAdmin)
+        alreadyExists <- session.unique(UserQueries.roleExists)(UserRole.SuperAdmin)
         willCreate = !alreadyExists
         _ <-
           if (willCreate) {
             for {
-              userId <- session.unique(Queries.insertUser)((fullName, email))
-              _ <- session.execute(Queries.insertUserRole)((userId, UserRole.SuperAdmin))
+              userId <- session.unique(UserQueries.insertUser)((fullName, email))
+              _ <- session.execute(UserQueries.insertUserRole)((userId, UserRole.SuperAdmin))
             } yield ()
           } else {
-            Applicative[F].unit
+            ().pure
           }
       } yield willCreate
     }
 
-object Queries:
+object UserQueries:
   val roleExists = sql"""
       select exists(
         select 1 from users u
