@@ -1,9 +1,14 @@
 package tafto.rest.api
+import tafto.rest.api.resources.*
+import BaseEndpoint.*
+import sttp.tapir.*
+import sttp.tapir.json.circe.*
 
-trait HealthEndpoints extends BaseEndpoints with HealthResponseSchemas {
-  val getHealth: Endpoint[Unit, HealthResponse] =
-    endpoint(
-      get(v1 / "health"),
-      ok(jsonResponse[HealthResponse])
-    )
+object HealthEndpoints {
+  val getHealth: Endpoint[Unit, Unit, Unit, HealthResponse, Any] =
+    base(name = "getHealth", "Healthcheck for Tafto system")
+      .in("health")
+      .get
+      .out(jsonBody[HealthResponse])
+
 }

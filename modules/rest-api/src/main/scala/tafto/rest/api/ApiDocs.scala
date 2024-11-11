@@ -1,12 +1,14 @@
 package tafto.rest.api
 
-import endpoints4s.openapi
-import endpoints4s.openapi.model.{Info, OpenApi}
+import sttp.apispec.openapi.OpenAPI
+import sttp.tapir.*
+import sttp.tapir.docs.openapi.OpenAPIDocsInterpreter
 
-object ApiDocs extends AllEndpoints with openapi.Endpoints with openapi.JsonEntitiesFromSchemas:
-
-  val api: OpenApi = openApi(
-    Info(title = "Tafto REST API", version = "1.0")
-  )(
-    getHealth
+object ApiDocs:
+  val openApi: OpenAPI = OpenAPIDocsInterpreter().toOpenAPI(
+    es = List(
+      HealthEndpoints.getHealth
+    ),
+    title = "Tafto IDM",
+    version = "1.0"
   )

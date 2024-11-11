@@ -5,9 +5,7 @@ ThisBuild / scalaVersion := "3.3.4"
 val testcontainersScalaVersion = "0.41.4"
 val ironVersion = "2.6.0"
 val http4sVersion = "0.23.29"
-val endpointsVersion = "1.12.1"
-val endpointsOpenApiVersion = "5.0.1"
-
+val tapirVersion = "1.11.8"
 
 def module(name: String): Project = Project(id = s"tafto-${name}",  base = file(s"modules/$name"))
   .settings(
@@ -65,9 +63,10 @@ lazy val restApi = module("rest-api")
   .dependsOn(core)
   .settings(
     libraryDependencies ++= Seq(
-      "org.endpoints4s" %% "algebra" % endpointsVersion,
-      "org.endpoints4s" %% "json-schema-generic" % endpointsVersion,
-      "org.endpoints4s" %% "openapi" % endpointsOpenApiVersion,
+      "com.softwaremill.sttp.tapir" %% "tapir-core" % tapirVersion,
+      "com.softwaremill.sttp.tapir" %% "tapir-json-circe" % tapirVersion,
+      "com.softwaremill.sttp.tapir" %% "tapir-openapi-docs" % tapirVersion,
+      "com.softwaremill.sttp.apispec" %% "openapi-circe-yaml" % "0.11.3"
     )
   )
 
@@ -77,7 +76,7 @@ lazy val restServer = module("rest-server")
     libraryDependencies ++= Seq(
         "org.http4s" %% "http4s-ember-server" % http4sVersion,
         "org.http4s" %% "http4s-dsl"          % http4sVersion,
-        "org.endpoints4s" %% "http4s-server" % "11.0.1",
+        "com.softwaremill.sttp.tapir" %% "tapir-http4s-server" % tapirVersion
     )
   )
 
