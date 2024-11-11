@@ -66,7 +66,9 @@ lazy val restApi = module("rest-api")
       "com.softwaremill.sttp.tapir" %% "tapir-core" % tapirVersion,
       "com.softwaremill.sttp.tapir" %% "tapir-json-circe" % tapirVersion,
       "com.softwaremill.sttp.tapir" %% "tapir-openapi-docs" % tapirVersion,
-      "com.softwaremill.sttp.apispec" %% "openapi-circe-yaml" % "0.11.3"
+      "com.softwaremill.sttp.apispec" %% "openapi-circe-yaml" % "0.11.3",
+      "io.github.iltotore" %% "iron-circe" % ironVersion,
+      "com.softwaremill.sttp.tapir" %% "tapir-iron" % tapirVersion
     )
   )
 

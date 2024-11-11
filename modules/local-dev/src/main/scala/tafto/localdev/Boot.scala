@@ -15,7 +15,8 @@ object Boot extends IOApp.Simple:
     _ <- Resource.eval(DatabaseMigrator.migrate[IO](dbConfig))
     database <- Database.make[IO](dbConfig)
     healthService = PgHealthService(database)
-    _ <- RestServer.make(healthService)
+    userRepo = PgUserRepo(database)
+    _ <- RestServer.make(healthService, userRepo)
   yield ()
 
   val logger = consoleLogger[IO]()
