@@ -6,8 +6,5 @@ import sttp.tapir.Schema
 
 final case class HealthResponse(
     message: String
-)
-
-object HealthResponse:
-  given codec: Codec[HealthResponse] = deriveCodec
-  given schema: Schema[HealthResponse] = Schema.derived
+) derives Schema,
+      Codec

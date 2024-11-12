@@ -9,15 +9,11 @@ import io.github.iltotore.iron.cats.given
 import io.circe.Decoder
 import sttp.tapir.Schema
 import sttp.tapir.codec.iron.given
-import io.circe.Encoder
+import io.circe.Codec
 
 final case class InitSuperAdminRequest(
     email: Email,
     fullName: Option[NonEmptyString],
     password: UserPassword
-)
-
-object InitSuperAdminRequest:
-  given decoder: Decoder[InitSuperAdminRequest] = deriveDecoder
-  given encoder: Encoder[InitSuperAdminRequest] = deriveEncoder
-  given schema: Schema[InitSuperAdminRequest] = Schema.derived
+) derives Schema,
+      Codec

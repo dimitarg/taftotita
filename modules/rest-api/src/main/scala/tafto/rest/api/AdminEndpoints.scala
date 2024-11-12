@@ -4,6 +4,7 @@ import BaseEndpoint.*
 import sttp.tapir.*
 import sttp.tapir.json.circe.*
 import InitSuperAdminRequest.given
+import sttp.model.StatusCode
 
 object AdminEndpoints:
 
@@ -17,3 +18,9 @@ object AdminEndpoints:
     .in("init-super-admin")
     .post
     .in(jsonBody[InitSuperAdminRequest])
+    .out(statusCode(StatusCode.NoContent).description("The specified super admin user was successfully initialised"))
+    .errorOut(
+      oneOf[ClientError](
+        oneOfVariant[ClientError.Conflict](statusCode(StatusCode.Conflict).and(jsonBody[ClientError.Conflict]))
+      )
+    )
