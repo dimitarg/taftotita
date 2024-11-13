@@ -14,7 +14,10 @@ create table user_roles (
 create index user_roles_user_id_idx on user_roles(user_id);
 create index user_roles_role_idx on user_roles(role);
 
+create type password_hash_algo as enum ('bcrypt');
+
 create table user_passwords (
-  user_id bigserial primary key references users(id) on delete cascade, 
-  password_hash text not null
+  user_id bigserial primary key references users(id) on delete cascade,
+  algo password_hash_algo not null,
+  hash text not null
 );

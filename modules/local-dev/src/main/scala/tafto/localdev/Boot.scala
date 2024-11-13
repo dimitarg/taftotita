@@ -3,6 +3,7 @@ package tafto.localdev
 import cats.effect.*
 import tafto.testcontainers.*
 import tafto.persist.*
+import tafto.crypto.*
 import natchez.Trace.Implicits.noop
 import tafto.rest.server.RestServer
 import tafto.db.DatabaseMigrator
@@ -15,7 +16,8 @@ object Boot extends IOApp.Simple:
     _ <- Resource.eval(DatabaseMigrator.migrate[IO](dbConfig))
     database <- Database.make[IO](dbConfig)
     healthService = PgHealthService(database)
-    userRepo = PgUserRepo(database)
+    passwordHasher = PasswordHasherImpl[IO]
+    userRepo = PgUserRepo(database, passwordHasher)
     _ <- RestServer.make(healthService, userRepo)
   yield ()
 

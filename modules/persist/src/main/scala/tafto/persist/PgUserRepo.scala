@@ -1,6 +1,6 @@
 package tafto.persist
 
-import tafto.service.UserRepo
+import tafto.service.{UserRepo, PasswordHasher}
 import tafto.domain.*
 import tafto.util.NonEmptyString
 import skunk.implicits.*
@@ -8,7 +8,8 @@ import skunk.codec.all as skunkCodecs
 import cats.implicits.*
 import cats.effect.MonadCancelThrow
 
-final case class PgUserRepo[F[_]: MonadCancelThrow](database: Database[F]) extends UserRepo[F]:
+final case class PgUserRepo[F[_]: MonadCancelThrow](database: Database[F], passwordHasher: PasswordHasher[F])
+    extends UserRepo[F]:
   import PgUserRepo.*
   override def initSuperAdmin(email: Email, fullName: Option[NonEmptyString], password: UserPassword): F[Boolean] =
     database.transact { session =>
@@ -20,6 +21,8 @@ final case class PgUserRepo[F[_]: MonadCancelThrow](database: Database[F]) exten
             for {
               userId <- session.unique(UserQueries.insertUser)((fullName, email))
               _ <- session.execute(UserQueries.insertUserRole)((userId, UserRole.SuperAdmin))
+              hashedPassword <- passwordHasher.hashPassword(PasswordHashAlgo.Bcrypt, password)
+              _ <- session.execute(UserQueries.insertUserPassword)(userId, hashedPassword)
             } yield ()
           } else {
             ().pure
@@ -42,4 +45,8 @@ object UserQueries:
 
   val insertUserRole = sql"""
       insert into user_roles(user_id, role) values (${skunkCodecs.int8}, ${codecs.userRole});
+    """.command
+
+  val insertUserPassword = sql"""
+      insert into user_passwords(user_id, algo, hash) values (${skunkCodecs.int8}, ${codecs.hashedUserPassword});
     """.command

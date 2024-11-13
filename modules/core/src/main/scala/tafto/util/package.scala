@@ -8,6 +8,7 @@ import io.github.iltotore.iron.constraint.all.*
 
 package object util:
   type NonEmpty = MinLength[1]
+  type SizedBetween[Min <: Int, Max <: Int] = MinLength[Min] & MaxLength[Max]
   type NonEmptyString = String :| NonEmpty
 
   opaque type Host = NonEmptyString

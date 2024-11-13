@@ -77,12 +77,17 @@ lazy val restServer = module("rest-server")
   .settings(
     libraryDependencies ++= Seq(
         "org.http4s" %% "http4s-ember-server" % http4sVersion,
-        "org.http4s" %% "http4s-dsl"          % http4sVersion,
         "com.softwaremill.sttp.tapir" %% "tapir-http4s-server" % tapirVersion
     )
   )
 
-
+lazy val crypto = module("crypto")
+  .dependsOn(config)
+  .settings(
+    libraryDependencies ++= Seq(
+      "io.github.jmcardon" %% "tsec-password" % "0.5.0",
+    )
+  )
 
 lazy val testContainers = module("testcontainers")
   .dependsOn(config)
@@ -93,8 +98,8 @@ lazy val testContainers = module("testcontainers")
   )
 
 lazy val localDev = module("local-dev")
-  .dependsOn(migrations, persist, restServer, testContainers)
+  .dependsOn(migrations, persist, restServer, crypto, testContainers)
 
 lazy val root = (project in file("."))
-  .aggregate(logging, core, migrations, config, persist, testContainers, restApi, restServer, localDev)
+  .aggregate(logging, core, migrations, config, persist, testContainers, restApi, restServer, localDev, crypto)
 
