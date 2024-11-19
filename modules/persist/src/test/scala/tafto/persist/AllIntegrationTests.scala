@@ -11,7 +11,7 @@ import weaver.pure.*
 object AllIntegrationTests extends Suite:
 
   val dbResource: Resource[IO, Database[IO]] = for {
-    pg <- Postgres.make(dataBind = None)
+    pg <- Postgres.make(dataBind = None, tailLog = true)
     config = pg.databaseConfig
     db <- Database.make(config)
     _ <- Resource.eval(DatabaseMigrator.migrate(config))
@@ -22,6 +22,7 @@ object AllIntegrationTests extends Suite:
       // these need to run first as they expect an uninitialised super admin
       InitSuperAdminTests.tests(db) ++
         Stream(
-          PgHealthServiceTests.tests(db)
+          PgHealthServiceTests.tests(db),
+          PgEmailMessageRepoTests.tests(db)
         ).parJoinUnbounded
     }

@@ -21,3 +21,19 @@ create table user_passwords (
   algo password_hash_algo not null,
   hash text not null
 );
+
+create type email_status as enum ('scheduled', 'sent', 'error');
+
+create table email_messages(
+  id bigserial primary key,
+  subject text,
+  to_ text[] not null,
+  cc text[] not null,
+  bcc text[] not null,
+  body text,
+  status email_status,
+  num_attempts int,
+  error text,
+  created_at timestamptz not null,
+  last_attempted_at timestamptz
+);

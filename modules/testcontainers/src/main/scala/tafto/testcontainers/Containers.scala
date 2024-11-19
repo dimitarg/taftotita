@@ -12,8 +12,7 @@ final case class Containers(
 object Containers:
   def make(config: ContainersConfig): Resource[IO, Containers] = for {
     pgBind <- Resource.eval(config.pgCache.traverse(prepare))
-    // _ <- Resource.eval(IO.raiseError(new RuntimeException("boom")))
-    pg <- Postgres.make(pgBind)
+    pg <- Postgres.make(pgBind, config.tailContainerLog)
   } yield Containers(pg)
 
   def prepare(bind: FsBind): IO[ValidHostFsBind] = for {

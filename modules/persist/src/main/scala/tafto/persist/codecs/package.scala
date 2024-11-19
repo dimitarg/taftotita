@@ -8,9 +8,14 @@ import skunk.codec.all.*
 import io.github.iltotore.iron.*
 import io.github.iltotore.iron.skunk.*
 import _root_.skunk.data.Type
+import _root_.skunk.data.Arr
 
 package object codecs:
+  def toList[A](underlying: Codec[Arr[A]]): Codec[List[A]] = underlying.imap(_.toList)(Arr.fromFoldable(_))
+
   val email: Codec[Email] = text.eimap(Email.either)(_.value)
+  val _email: Codec[Arr[Email]] = _text.eimap(_.traverse(Email.either))(_.map(_.value))
+
   val userRole: Codec[UserRole] = varchar(100).eimap(UserRole.either)(_.value)
   def nonEmptyString(underlying: Codec[String]): Codec[NonEmptyString] = underlying.refined[NonEmpty]
   val nonEmptyText: Codec[NonEmptyString] = nonEmptyString(text)

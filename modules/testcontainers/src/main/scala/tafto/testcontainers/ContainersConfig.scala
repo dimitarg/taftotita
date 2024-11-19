@@ -21,9 +21,10 @@ object FsBind:
   )
 
 final case class ContainersConfig(
-    pgCache: Option[FsBind]
+    pgCache: Option[FsBind],
+    tailContainerLog: Boolean
 )
 
 object ContainersConfig:
-  val default = ContainersConfig(pgCache = None)
-  val localDev = ContainersConfig(pgCache = FsBind.forPgDocker.some)
+  val default = ContainersConfig(pgCache = None, tailContainerLog = false)
+  val localDev = ContainersConfig(pgCache = FsBind.forPgDocker.some, tailContainerLog = true)
