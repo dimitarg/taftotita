@@ -8,7 +8,8 @@ import fs2.Stream
 import tafto.domain.*
 import tafto.util.*
 import skunk.data.Identifier
-import io.github.iltotore.iron.*
+import io.github.iltotore.iron.autoRefine
+import io.github.iltotore.iron.cats.given
 
 object PgEmailMessageRepoTests {
 
@@ -76,6 +77,29 @@ object PgEmailMessageRepoTests {
                 yield expect(receivedIds.size === testSize) and
                   expect(receivedIds.toSet === idSet)
               }
+            },
+            test("PgEmailMessageRepo.getMessage works correctly") {
+              val testMessage = EmailMessage(
+                subject = Some("Woohoo"),
+                to = List(Email("ok@bar.baz")),
+                cc = List(Email("one@example.com")),
+                bcc = List(Email("two@example.com"), Email("three@example.com")),
+                body = Some("Yo.")
+              )
+
+              for {
+                ids <- messageRepo.insertMessages(NonEmptyList.one(testMessage))
+                id <- ids match {
+                  case List(x) => x.pure[IO]
+                  case xs      => failure(s"expected single message, got $xs").failFast[IO] >> IO.never
+                }
+
+                maybreResult <- messageRepo.getMessage(id)
+                result = maybreResult match
+                  case None => failure("Expected message but none returned.")
+                  case Some(messageFromDb, status) =>
+                    expect(messageFromDb === testMessage) and expect(status === EmailStatus.Scheduled)
+              } yield result
             }
           )
         )

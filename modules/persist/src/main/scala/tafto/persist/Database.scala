@@ -1,6 +1,8 @@
 package tafto.persist
 import cats.implicits.*
+import fs2.Stream
 import skunk.*
+import skunk.data.{Identifier, Notification}
 import cats.effect.*
 import cats.effect.std.Console
 import tafto.config.DatabaseConfig
@@ -20,10 +22,17 @@ final case class Database[F[_]: MonadCancelThrow](pool: Resource[F, Session[F]])
       body(session)
     }
 
+  def subscribeToChannel(channelId: Identifier): Stream[F, Notification[String]] =
+    Stream.resource(pool).flatMap { session =>
+      session.channel(channelId).listen(Database.notificationQueueSize)
+    }
+
 object Database:
   // error is raised if query has more than 32767 parameters
   // this batch size allows for ~65 query parameters per row, which should be plenty
   val batchSize = 500
+  // this is up to ~80MB memory under the default PG configuration (each message cannot exceed 8000 bytes)
+  val notificationQueueSize = 10000
 
   def make[F[_]: Temporal: Trace: Network: Console](config: DatabaseConfig): Resource[F, Database[F]] =
     Session

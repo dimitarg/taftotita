@@ -36,3 +36,20 @@ package object codecs:
 
   val hashedUserPassword: Codec[HashedUserPassword] =
     (passwordHashAlgo ~ text).to[HashedUserPassword]
+
+  val emailMessageId: Codec[EmailMessage.Id] = int8.imap(EmailMessage.Id(_))(_.value)
+
+  val emailStatus: Codec[EmailStatus] = `enum`(
+    encode = _ match
+      case EmailStatus.Scheduled => "scheduled"
+      case EmailStatus.Sent      => "sent"
+      case EmailStatus.Error     => "error"
+    ,
+    decode = _ match
+      case "scheduled" => EmailStatus.Scheduled.some
+      case "sent"      => EmailStatus.Sent.some
+      case "error"     => EmailStatus.Error.some
+      case _           => None
+    ,
+    tpe = Type("email_status")
+  )
