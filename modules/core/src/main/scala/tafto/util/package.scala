@@ -1,6 +1,6 @@
 package tafto
 
-import cats.implicits._
+import cats.implicits.*
 import cats.MonadThrow
 
 import io.github.iltotore.iron.*

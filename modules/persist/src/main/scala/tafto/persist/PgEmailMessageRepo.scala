@@ -15,6 +15,8 @@ import cats.effect.kernel.MonadCancelThrow
 import io.github.iltotore.iron.autoRefine
 import io.github.iltotore.iron.cats.given
 import tafto.service.comms.EmailMessageRepo
+import tafto.domain.EmailMessage.Id
+import skunk.data.Completion
 
 final case class PgEmailMessageRepo[F[_]: Clock: MonadCancelThrow](
     database: Database[F],
@@ -38,6 +40,19 @@ final case class PgEmailMessageRepo[F[_]: Clock: MonadCancelThrow](
     database.pool.use { s =>
       s.option(EmailMessageQueries.getMessage)(id)
     }
+
+  override def markAsSent(id: Id): F[Boolean] = for
+    now <- Time[F].utc
+    result <- database.pool.use { s =>
+      for
+        command <- s.prepare(EmailMessageQueries.markAsSent)
+        completion <- command.execute((now, id))
+        result = completion match
+          case Completion.Update(count) if count > 0 => true
+          case _                                     => false
+      yield result
+    }
+  yield result
 
   override val insertedMessages: Stream[F, EmailMessage.Id] =
     database
@@ -67,9 +82,13 @@ object EmailMessageQueries {
     """.query(emailMessageId)
   }
 
-  def getMessage = {
+  val getMessage =
     sql"""
-      select subject, to_, cc, bcc, body, status from email_messages where id = ${emailMessageId}
+      select subject, to_, cc, bcc, body, status from email_messages where id = ${emailMessageId};
     """.query(domainEmailMessageCodec *: emailStatus)
-  }
+
+  val markAsSent = sql"""
+    update email_messages set status='sent', last_attempted_at=${timestamptz} where id=${emailMessageId};
+  """.command
+
 }

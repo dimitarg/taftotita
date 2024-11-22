@@ -10,6 +10,7 @@ import tafto.util.*
 import skunk.data.Identifier
 import io.github.iltotore.iron.autoRefine
 import io.github.iltotore.iron.cats.given
+import tafto.service.comms.EmailMessageRepo
 
 object PgEmailMessageRepoTests {
 
@@ -74,7 +75,7 @@ object PgEmailMessageRepoTests {
                     .take(testSize)
                     .compile
                     .toList
-                yield expect(receivedIds.size === testSize) and
+                yield expect(receivedIds.size === testSize) `and`
                   expect(receivedIds.toSet === idSet)
               }
             },
@@ -88,22 +89,43 @@ object PgEmailMessageRepoTests {
               )
 
               for {
-                ids <- messageRepo.insertMessages(NonEmptyList.one(testMessage))
-                id <- ids match {
-                  case List(x) => x.pure[IO]
-                  case xs      => failure(s"expected single message, got $xs").failFast[IO] >> IO.never
-                }
+                id <- insertMessage(messageRepo)(testMessage)
+                (messageFromDb, status) <- getMessage(messageRepo)(id)
+              } yield expect(messageFromDb === testMessage) `and` expect(status === EmailStatus.Scheduled)
+            },
+            test("PgEmailMessageRepo.markAsSent works correctly") {
+              val testMessage = EmailMessage(
+                subject = Some("asd"),
+                to = List(Email("a@bar.baz")),
+                cc = List(Email("b@example.com")),
+                bcc = List(Email("c@example.com"), Email("d@example.com")),
+                body = Some("Yoyo.")
+              )
 
-                maybreResult <- messageRepo.getMessage(id)
-                result = maybreResult match
-                  case None => failure("Expected message but none returned.")
-                  case Some(messageFromDb, status) =>
-                    expect(messageFromDb === testMessage) and expect(status === EmailStatus.Scheduled)
-              } yield result
+              for
+                id <- insertMessage(messageRepo)(testMessage)
+                marked <- messageRepo.markAsSent(id)
+                (_, status) <- getMessage(messageRepo)(id)
+              yield expect(marked === true) `and` expect(status === EmailStatus.Sent)
             }
           )
         )
       }
 
   }
+
+  def insertMessage(repo: EmailMessageRepo[IO])(message: EmailMessage): IO[EmailMessage.Id] = for
+    ids <- repo.insertMessages(NonEmptyList.one(message))
+    id <- ids match {
+      case List(x) => x.pure[IO]
+      case xs      => failure(s"expected single message, got $xs").failFast[IO] >> IO.never
+    }
+  yield id
+
+  def getMessage(repo: EmailMessageRepo[IO])(id: EmailMessage.Id): IO[(EmailMessage, EmailStatus)] = for
+    maybreResult <- repo.getMessage(id)
+    result <- maybreResult match
+      case None                        => failure("Expected message but none returned.").failFast[IO] >> IO.never
+      case Some(messageFromDb, status) => (messageFromDb, status).pure[IO]
+  yield result
 }

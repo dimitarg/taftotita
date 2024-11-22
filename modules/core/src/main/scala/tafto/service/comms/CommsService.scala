@@ -30,7 +30,18 @@ object CommsService:
               case None =>
                 Logger[F].warn(s"Message $id does not exist!")
               case Some(message, EmailStatus.Scheduled) =>
-                emailSender.sendEmail(message)
+                for
+                  _ <- emailSender.sendEmail(message)
+                  markedAsSent <- emailMessageRepo.markAsSent(id)
+                  _ <-
+                    if (!markedAsSent) {
+                      Logger[F].warn(
+                        s"Duplicate delivery detected. Email message $id sent but already marked as sent by another process."
+                      )
+                    } else {
+                      ().pure[F]
+                    }
+                yield ()
               case Some(message, status) =>
                 Logger[F].info(
                   s"Message $id is in status $status and will not be (re)sent."

@@ -7,7 +7,7 @@ import cats.effect.IO
 
 package object testcontainers:
 
-  extension (container: SingleContainer[_])
+  extension (container: SingleContainer[?])
 
     def refineHost: Either[String, Host] =
       Host.either(container.host)

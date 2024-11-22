@@ -3,7 +3,7 @@ package tafto.log
 import cats.effect.{Sync, IO}
 import cats.effect.std.Dispatcher
 import cats.effect.unsafe.implicits.global
-import io.odin._
+import io.odin.*
 import io.odin.slf4j.OdinLoggerServiceProvider
 
 class TaftoLogger extends OdinLoggerServiceProvider[IO]:

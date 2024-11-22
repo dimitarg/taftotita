@@ -13,6 +13,9 @@ def module(name: String): Project = Project(id = s"tafto-${name}",  base = file(
       "io.github.dimitarg"  %%  "weaver-test-extra" % "0.5.11" % "test"
     )
   )
+  .settings(scalacOptions ++= Seq(
+    "-source:future"
+  ))
 
 lazy val logging = module("logging")
   .settings(

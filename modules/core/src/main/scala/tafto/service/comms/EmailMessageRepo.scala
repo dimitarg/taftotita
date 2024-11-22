@@ -8,3 +8,4 @@ trait EmailMessageRepo[F[_]]:
   def insertMessages(messages: NonEmptyList[EmailMessage]): F[List[EmailMessage.Id]]
   def getMessage(id: EmailMessage.Id): F[Option[(EmailMessage, EmailStatus)]]
   def insertedMessages: Stream[F, EmailMessage.Id]
+  def markAsSent(id: EmailMessage.Id): F[Boolean]
