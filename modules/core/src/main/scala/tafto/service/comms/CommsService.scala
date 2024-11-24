@@ -23,30 +23,35 @@ object CommsService:
         emailMessageRepo.insertMessages(messages)
 
       override def run: Stream[F, Unit] =
-        emailMessageRepo.insertedMessages.evalMap { id =>
-          for
-            maybeMessage <- emailMessageRepo.getMessage(id)
-            _ <- maybeMessage match
-              case None =>
-                Logger[F].warn(s"Message $id does not exist!")
-              case Some(message, EmailStatus.Scheduled) =>
-                for
-                  _ <- emailSender.sendEmail(message)
-                  markedAsSent <- emailMessageRepo.markAsSent(id)
-                  _ <-
-                    if (!markedAsSent) {
-                      Logger[F].warn(
-                        s"Duplicate delivery detected. Email message $id sent but already marked as sent by another process."
-                      )
-                    } else {
-                      ().pure[F]
-                    }
-                yield ()
-              case Some(message, status) =>
-                Logger[F].info(
-                  s"Message $id is in status $status and will not be (re)sent."
-                )
-          yield ()
-        }
+        emailMessageRepo.insertedMessages
+          .evalMap { id =>
+            for
+              maybeMessage <- emailMessageRepo.getMessage(id)
+              _ <- Logger[F].info(s"got message $id")
+              _ <- maybeMessage match
+                case None =>
+                  Logger[F].warn(s"Message $id does not exist!")
+                case Some(message, EmailStatus.Scheduled) =>
+                  for
+                    _ <- emailSender.sendEmail(id, message)
+                    markedAsSent <- emailMessageRepo.markAsSent(id)
+                    _ <-
+                      if (!markedAsSent) {
+                        Logger[F].warn(
+                          s"Duplicate delivery detected. Email message $id sent but already marked as sent by another process."
+                        )
+                      } else {
+                        ().pure[F]
+                      }
+                  yield ()
+                case Some(message, status) =>
+                  Logger[F].info(
+                    s"Message $id is in status $status and will not be (re)sent."
+                  )
+            yield ()
+          }
+          .onFinalize {
+            Logger[F].info("Exiting email consumer stream.")
+          }
 
     }

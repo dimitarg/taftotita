@@ -13,9 +13,13 @@ def module(name: String): Project = Project(id = s"tafto-${name}",  base = file(
       "io.github.dimitarg"  %%  "weaver-test-extra" % "0.5.11" % "test"
     )
   )
-  .settings(scalacOptions ++= Seq(
-    "-source:future"
-  ))
+  .settings(
+    scalacOptions ++= Seq(
+      "-source:future",
+    ),
+    Test / fork := true,
+    run / fork := true,
+  )
 
 lazy val logging = module("logging")
   .settings(
@@ -103,6 +107,13 @@ lazy val testContainers = module("testcontainers")
 lazy val localDev = module("local-dev")
   .dependsOn(migrations, persist, restServer, crypto, testContainers)
 
+lazy val integrationTests = module("integration-tests")
+  .dependsOn(migrations, persist, restServer, crypto, testContainers)
+
+// make sure any test projects spinning up docker containers run in sequence, so resource usage stays sane.
+(integrationTests / test) := ((integrationTests / Test / test) dependsOn (persist / Test / test)).value
+
+
 lazy val root = (project in file("."))
-  .aggregate(logging, core, migrations, config, persist, testContainers, restApi, restServer, localDev, crypto)
+  .aggregate(logging, core, migrations, config, persist, testContainers, restApi, restServer, localDev, crypto, integrationTests)
 
