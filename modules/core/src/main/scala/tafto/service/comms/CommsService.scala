@@ -27,7 +27,7 @@ object CommsService:
           .evalMap { id =>
             for
               maybeMessage <- emailMessageRepo.getMessage(id)
-              _ <- Logger[F].info(s"got message $id")
+              _ <- Logger[F].debug(s"Processing message $id.")
               _ <- maybeMessage match
                 case None =>
                   Logger[F].warn(s"Message $id does not exist!")
