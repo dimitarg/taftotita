@@ -56,7 +56,6 @@ object CommsServiceTest:
           val emailSender: EmailSender[IO] = { (_: Id, _: EmailMessage) =>
             IO.raiseError(new RuntimeException("Failed I have."))
           }
-          import scala.concurrent.duration.*
           for
             chanId <- ChannelId("error_test").asIO
             emailMessageRepo = PgEmailMessageRepo(db, chanId)
@@ -74,7 +73,6 @@ object CommsServiceTest:
               for
                 scheduledIds <- commsService.scheduleEmails(NonEmptyList.one(msg))
                 streamResult <- awaitFinished
-                _ <- IO.sleep(5.seconds)
                 dbEmails <- scheduledIds.traverse(emailMessageRepo.getMessage).map(_.flatten)
               yield expect(dbEmails === List((msg, EmailStatus.Error))) `and`
                 expect(streamResult.isSuccess)
