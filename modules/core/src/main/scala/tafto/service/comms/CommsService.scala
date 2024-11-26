@@ -26,12 +26,14 @@ object CommsService:
         emailMessageRepo.insertedMessages
           .evalMap { id =>
             for
-              maybeMessage <- emailMessageRepo.getMessage(id)
               _ <- Logger[F].debug(s"Processing message $id.")
+              maybeMessage <- emailMessageRepo.claim(id)
               _ <- maybeMessage match
                 case None =>
-                  Logger[F].warn(s"Message $id does not exist!")
-                case Some(message, EmailStatus.Scheduled) =>
+                  Logger[F].debug(
+                    s"Could not claim message $id for sending as it was already claimed by another process, or does not exist."
+                  )
+                case Some(message) =>
                   for
                     _ <- emailSender.sendEmail(id, message)
                     markedAsSent <- emailMessageRepo.markAsSent(id)
@@ -44,10 +46,6 @@ object CommsService:
                         ().pure[F]
                       }
                   yield ()
-                case Some(message, status) =>
-                  Logger[F].info(
-                    s"Message $id is in status $status and will not be (re)sent."
-                  )
             yield ()
           }
           .onFinalize {

@@ -42,11 +42,13 @@ package object codecs:
   val emailStatus: Codec[EmailStatus] = `enum`(
     encode = _ match
       case EmailStatus.Scheduled => "scheduled"
+      case EmailStatus.Claimed   => "claimed"
       case EmailStatus.Sent      => "sent"
       case EmailStatus.Error     => "error"
     ,
     decode = _ match
       case "scheduled" => EmailStatus.Scheduled.some
+      case "claimed"   => EmailStatus.Claimed.some
       case "sent"      => EmailStatus.Sent.some
       case "error"     => EmailStatus.Error.some
       case _           => None

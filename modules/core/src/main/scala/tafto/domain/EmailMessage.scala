@@ -18,6 +18,6 @@ object EmailMessage:
   given eq: Eq[EmailMessage] = Eq.fromUniversalEquals
 
 enum EmailStatus:
-  case Scheduled, Sent, Error
+  case Scheduled, Claimed, Sent, Error
 object EmailStatus:
   given eq: Eq[EmailStatus] = Eq.fromUniversalEquals

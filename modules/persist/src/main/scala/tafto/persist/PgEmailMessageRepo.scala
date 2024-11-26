@@ -41,18 +41,37 @@ final case class PgEmailMessageRepo[F[_]: Clock: MonadCancelThrow](
       s.option(EmailMessageQueries.getMessage)(id)
     }
 
-  override def markAsSent(id: Id): F[Boolean] = for
+  override def claim(id: Id): F[Option[EmailMessage]] =
+    updateStatusReturning(id = id, status = EmailStatus.Claimed, previousStatus = EmailStatus.Scheduled)
+
+  override def markAsSent(id: Id): F[Boolean] =
+    updateStatus(id = id, status = EmailStatus.Sent, previousStatus = EmailStatus.Claimed)
+
+  private def updateStatus(id: Id, status: EmailStatus, previousStatus: EmailStatus): F[Boolean] = for
     now <- Time[F].utc
     result <- database.pool.use { s =>
       for
-        command <- s.prepare(EmailMessageQueries.markAsSent)
-        completion <- command.execute((now, id))
-        result = completion match
-          case Completion.Update(count) if count > 0 => true
-          case _                                     => false
+        command <- s.prepare(EmailMessageQueries.updateStatus)
+        completion <- command.execute((status, now, id, previousStatus))
+        result = wasUpdated(completion)
       yield result
     }
   yield result
+
+  private def updateStatusReturning(id: Id, status: EmailStatus, previousStatus: EmailStatus): F[Option[EmailMessage]] =
+    for
+      now <- Time[F].utc
+      result <- database.pool.use { s =>
+        for
+          query <- s.prepare(EmailMessageQueries.updateStatusReturning)
+          result <- query.option((status, now, id, previousStatus))
+        yield result
+      }
+    yield result
+
+  private def wasUpdated(completion: Completion) = completion match
+    case Completion.Update(count) if count > 0 => true
+    case _                                     => false
 
   override val insertedMessages: Stream[F, EmailMessage.Id] =
     database
@@ -87,8 +106,13 @@ object EmailMessageQueries {
       select subject, to_, cc, bcc, body, status from email_messages where id = ${emailMessageId};
     """.query(domainEmailMessageCodec *: emailStatus)
 
-  val markAsSent = sql"""
-    update email_messages set status='sent', last_attempted_at=${timestamptz} where id=${emailMessageId};
+  val updateStatus = sql"""
+    update email_messages set status=${emailStatus}, last_attempted_at=${timestamptz} where id=${emailMessageId} and status=${emailStatus};
   """.command
+
+  val updateStatusReturning = sql"""
+    update email_messages set status=${emailStatus}, last_attempted_at=${timestamptz} where id=${emailMessageId} and status=${emailStatus}
+    returning subject, to_, cc, bcc, body;
+  """.query(domainEmailMessageCodec)
 
 }

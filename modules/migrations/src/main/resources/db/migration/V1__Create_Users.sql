@@ -22,7 +22,7 @@ create table user_passwords (
   hash text not null
 );
 
-create type email_status as enum ('scheduled', 'sent', 'error');
+create type email_status as enum ('scheduled', 'claimed', 'sent', 'error');
 
 create table email_messages(
   id bigserial primary key,
