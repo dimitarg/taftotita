@@ -3,7 +3,7 @@ package tafto.service.comms
 import tafto.domain.*
 import fs2.Stream
 import cats.data.NonEmptyList
-import cats.Monad
+import cats.MonadThrow
 import cats.implicits.*
 import io.odin.Logger
 
@@ -16,7 +16,10 @@ trait CommsService[F[_]]:
   def run: Stream[F, Unit]
 
 object CommsService:
-  def apply[F[_]: Monad: Logger](emailMessageRepo: EmailMessageRepo[F], emailSender: EmailSender[F]): CommsService[F] =
+  def apply[F[_]: MonadThrow: Logger](
+      emailMessageRepo: EmailMessageRepo[F],
+      emailSender: EmailSender[F]
+  ): CommsService[F] =
     new CommsService[F] {
 
       override def scheduleEmails(messages: NonEmptyList[EmailMessage]): F[List[EmailMessage.Id]] =
@@ -35,21 +38,37 @@ object CommsService:
                   )
                 case Some(message) =>
                   for
-                    _ <- emailSender.sendEmail(id, message)
-                    markedAsSent <- emailMessageRepo.markAsSent(id)
-                    _ <-
-                      if (!markedAsSent) {
-                        Logger[F].warn(
-                          s"Duplicate delivery detected. Email message $id sent but already marked as sent by another process."
-                        )
-                      } else {
-                        ().pure[F]
-                      }
+                    sendEmailResult <- emailSender.sendEmail(id, message).attempt
+                    _ <- sendEmailResult.fold(markAsError(id, _), _ => markAsSent(id))
                   yield ()
             yield ()
           }
           .onFinalize {
             Logger[F].info("Exiting email consumer stream.")
           }
+
+      private def markAsSent(id: EmailMessage.Id): F[Unit] =
+        emailMessageRepo
+          .markAsSent(id)
+          .flatTap {
+            case true => ().pure[F]
+            case false =>
+              Logger[F].error(
+                s"Duplicate delivery detected. Email message $id sent but already marked as sent by another process."
+              )
+          }
+          .void
+
+      private def markAsError(id: EmailMessage.Id, error: Throwable): F[Unit] =
+        for
+          _ <- Logger[F].error(s"Error when sending message ${id}", error)
+          wasMarked <- emailMessageRepo.markAsError(id, error.getMessage())
+          _ <-
+            if (wasMarked) {
+              ().pure[F]
+            } else {
+              Logger[F].warn(s"Could not mark message $id as error, was it rescheduled in the meantime?")
+            }
+        yield ()
 
     }

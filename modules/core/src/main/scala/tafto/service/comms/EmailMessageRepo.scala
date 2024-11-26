@@ -10,3 +10,4 @@ trait EmailMessageRepo[F[_]]:
   def insertedMessages: Stream[F, EmailMessage.Id]
   def claim(id: EmailMessage.Id): F[Option[EmailMessage]]
   def markAsSent(id: EmailMessage.Id): F[Boolean]
+  def markAsError(id: EmailMessage.Id, error: String): F[Boolean]

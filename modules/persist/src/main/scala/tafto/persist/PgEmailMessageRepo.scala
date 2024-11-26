@@ -15,7 +15,6 @@ import cats.effect.kernel.MonadCancelThrow
 import io.github.iltotore.iron.autoRefine
 import io.github.iltotore.iron.cats.given
 import tafto.service.comms.EmailMessageRepo
-import tafto.domain.EmailMessage.Id
 import skunk.data.Completion
 
 final case class PgEmailMessageRepo[F[_]: Clock: MonadCancelThrow](
@@ -41,13 +40,24 @@ final case class PgEmailMessageRepo[F[_]: Clock: MonadCancelThrow](
       s.option(EmailMessageQueries.getMessage)(id)
     }
 
-  override def claim(id: Id): F[Option[EmailMessage]] =
+  override def claim(id: EmailMessage.Id): F[Option[EmailMessage]] =
     updateStatusReturning(id = id, status = EmailStatus.Claimed, previousStatus = EmailStatus.Scheduled)
 
-  override def markAsSent(id: Id): F[Boolean] =
+  override def markAsSent(id: EmailMessage.Id): F[Boolean] =
     updateStatus(id = id, status = EmailStatus.Sent, previousStatus = EmailStatus.Claimed)
 
-  private def updateStatus(id: Id, status: EmailStatus, previousStatus: EmailStatus): F[Boolean] = for
+  override def markAsError(id: EmailMessage.Id, error: String): F[Boolean] = for
+    now <- Time[F].utc
+    result <- database.pool.use { s =>
+      for
+        command <- s.prepare(EmailMessageQueries.updateStatusAndError)
+        completion <- command.execute((EmailStatus.Error, now, error, 1, id, EmailStatus.Claimed))
+        result = wasUpdated(completion)
+      yield result
+    }
+  yield result
+
+  private def updateStatus(id: EmailMessage.Id, status: EmailStatus, previousStatus: EmailStatus): F[Boolean] = for
     now <- Time[F].utc
     result <- database.pool.use { s =>
       for
@@ -58,7 +68,11 @@ final case class PgEmailMessageRepo[F[_]: Clock: MonadCancelThrow](
     }
   yield result
 
-  private def updateStatusReturning(id: Id, status: EmailStatus, previousStatus: EmailStatus): F[Option[EmailMessage]] =
+  private def updateStatusReturning(
+      id: EmailMessage.Id,
+      status: EmailStatus,
+      previousStatus: EmailStatus
+  ): F[Option[EmailMessage]] =
     for
       now <- Time[F].utc
       result <- database.pool.use { s =>
@@ -108,6 +122,11 @@ object EmailMessageQueries {
 
   val updateStatus = sql"""
     update email_messages set status=${emailStatus}, last_attempted_at=${timestamptz} where id=${emailMessageId} and status=${emailStatus};
+  """.command
+
+  val updateStatusAndError = sql"""
+    update email_messages set status=${emailStatus}, last_attempted_at=${timestamptz}, error=${text}, num_attempts = num_attempts + ${int4}
+    where id=${emailMessageId} and status=${emailStatus};
   """.command
 
   val updateStatusReturning = sql"""

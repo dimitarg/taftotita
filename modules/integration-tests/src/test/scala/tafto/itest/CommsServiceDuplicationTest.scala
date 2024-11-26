@@ -9,12 +9,11 @@ import io.github.iltotore.iron.constraint.numeric.Positive
 import tafto.persist.*
 import fs2.*
 import weaver.pure.*
-import tafto.itest.util.RefBackedEmailSender
 import tafto.service.comms.CommsService
 import tafto.util.*
 import tafto.domain.*
+import tafto.itest.util.*
 
-import tafto.log.given
 import _root_.io.odin.Logger
 
 object CommsServiceDuplicationTest:
@@ -30,7 +29,9 @@ object CommsServiceDuplicationTest:
     TestCase(messageSize = 1000, parallelism = 8)
   )
 
-  def tests(db: Database[IO]): Stream[IO, Test] =
+  def tests(db: Database[IO])(using
+      logger: Logger[IO]
+  ): Stream[IO, Test] =
     seqSuite(
       testCases.map { testCase =>
         test(
@@ -62,12 +63,7 @@ object CommsServiceDuplicationTest:
 
               commsService.scheduleEmails(messages).flatMap { ids =>
                 for {
-                  _ <- Logger[IO].info(s"scheduled ${ids.size} messages for delivery.")
-                  sentEmails <- repeatWhile(emailSender.getEmails) {
-                    case (None, _)                 => true
-                    case (Some(previous), current) => current.length > previous.length
-                  }(5.seconds)
-                  _ <- Logger[IO].info(s"Sent ${sentEmails.size} emails")
+                  sentEmails <- emailSender.waitForIdleAndGetEmails(5.seconds)
                 } yield expect(sentEmails.size === testCase.messageSize) `and`
                   expect(sentEmails.map { case (id, _) => id }.toSet === ids.toSet)
               }
@@ -76,19 +72,3 @@ object CommsServiceDuplicationTest:
         }
       }
     )
-
-  def repeatWhile[F[_]: Temporal, A](prg: F[A])(pred: (Option[A], A) => Boolean)(interval: FiniteDuration): F[A] = {
-    Stream
-      .repeatEval(prg)
-      .metered(interval)
-      .zipWithPrevious
-      .takeWhile { case (prev, curr) =>
-        pred(prev, curr)
-      }
-      .compile
-      .lastOrError
-      .map { case (_, x) => x }
-  }
-
-  def useBackgroundStream[F[_]: Concurrent, A, B](xs: Stream[F, A])(prg: F[B]): F[B] =
-    xs.spawn.flatMap(_ => Stream.eval(prg)).compile.lastOrError

@@ -4,11 +4,13 @@ import tafto.testcontainers.Postgres
 
 import fs2.Stream
 import cats.effect.*
-import natchez.Trace.Implicits.noop
+import natchez.Trace
 import tafto.db.DatabaseMigrator
 import weaver.pure.*
 
-object AllIntegrationTests extends Suite:
+object AllPersistIntegrationTests extends Suite:
+
+  given trace: Trace[IO] = Trace.Implicits.noop
 
   val dbResource: Resource[IO, Database[IO]] = for {
     pg <- Postgres.make(dataBind = None, tailLog = true)
