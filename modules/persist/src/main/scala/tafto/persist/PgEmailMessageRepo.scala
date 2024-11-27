@@ -16,29 +16,35 @@ import io.github.iltotore.iron.autoRefine
 import io.github.iltotore.iron.cats.given
 import tafto.service.comms.EmailMessageRepo
 import skunk.data.Completion
+import skunk.Session
 
 final case class PgEmailMessageRepo[F[_]: Clock: MonadCancelThrow](
     database: Database[F],
     channelId: Identifier
 ) extends EmailMessageRepo[F]:
-  override def insertMessages(messages: NonEmptyList[EmailMessage]): F[List[EmailMessage.Id]] =
+  override def scheduleMessages(messages: NonEmptyList[EmailMessage]): F[List[EmailMessage.Id]] =
     database.transact { s =>
       for
         now <- Time[F].utc
         result <- Database.batched(s)(EmailMessageQueries.insertMessages)(messages.map { x =>
           (x, EmailStatus.Scheduled, 0, now)
         })
-        channel = s.channel(channelId)
-        _ <- result.traverse_(x => {
-          channel.notify(x.value.show)
-        })
+        _ <- notify(s, result)
       yield result
     }
+
+  private def notify(s: Session[F], ids: List[EmailMessage.Id]): F[Unit] =
+    val channel = s.channel(channelId)
+    ids.traverse_(x => channel.notify(x.show))
 
   override def getMessage(id: EmailMessage.Id): F[Option[(EmailMessage, EmailStatus)]] =
     database.pool.use { s =>
       s.option(EmailMessageQueries.getMessage)(id)
     }
+
+  override val getScheduledIds: F[List[EmailMessage.Id]] = database.pool.use { s =>
+    s.execute(EmailMessageQueries.getMessageIdsInStatus)(EmailStatus.Scheduled)
+  }
 
   override def claim(id: EmailMessage.Id): F[Option[EmailMessage]] =
     updateStatusReturning(id = id, status = EmailStatus.Claimed, previousStatus = EmailStatus.Scheduled)
@@ -87,7 +93,7 @@ final case class PgEmailMessageRepo[F[_]: Clock: MonadCancelThrow](
     case Completion.Update(count) if count > 0 => true
     case _                                     => false
 
-  override val insertedMessages: Stream[F, EmailMessage.Id] =
+  override val listen: Stream[F, EmailMessage.Id] =
     database
       .subscribeToChannel(channelId)
       .evalMap { notification =>
@@ -97,6 +103,10 @@ final case class PgEmailMessageRepo[F[_]: Clock: MonadCancelThrow](
           .map(EmailMessage.Id(_))
           .orThrow[F]
       }
+
+  override def notify(messages: List[EmailMessage.Id]): F[Unit] = database.pool.use { s =>
+    notify(s, messages)
+  }
 
 object EmailMessageQueries {
 
@@ -119,6 +129,10 @@ object EmailMessageQueries {
     sql"""
       select subject, to_, cc, bcc, body, status from email_messages where id = ${emailMessageId};
     """.query(domainEmailMessageCodec *: emailStatus)
+
+  val getMessageIdsInStatus = sql"""
+    select id from email_messages where status = ${emailStatus};
+  """.query(emailMessageId)
 
   val updateStatus = sql"""
     update email_messages set status=${emailStatus}, last_attempted_at=${timestamptz} where id=${emailMessageId} and status=${emailStatus};

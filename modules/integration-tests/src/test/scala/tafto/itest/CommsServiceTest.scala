@@ -16,6 +16,7 @@ import tafto.domain.EmailMessage
 import _root_.cats.data.NonEmptyList
 import tafto.service.comms.EmailSender
 import tafto.domain.EmailMessage.Id
+import _root_.io.github.iltotore.iron.cats.given
 
 object CommsServiceTest:
 
@@ -72,12 +73,42 @@ object CommsServiceTest:
             result <- commsService.run.take(1).compile.drain.background.use { awaitFinished =>
               for
                 scheduledIds <- commsService.scheduleEmails(NonEmptyList.one(msg))
-                streamResult <- awaitFinished
+                _ <- awaitFinished.flatMap(_.embedError)
                 dbEmails <- scheduledIds.traverse(emailMessageRepo.getMessage).map(_.flatten)
-              yield expect(dbEmails === List((msg, EmailStatus.Error))) `and`
-                expect(streamResult.isSuccess)
+              yield expect(dbEmails === List((msg, EmailStatus.Error)))
             }
           yield result
+        },
+        test("Backfill publishes scheduled entities to channel") {
+          for
+            chanId <- ChannelId("backfill_test").asIO
+            tempChanId <- ChannelId("backfill_test_tmp").asIO
+            emailSender <- RefBackedEmailSender.make[IO]
+            msg = EmailMessage(
+              subject = Some("Comms error test"),
+              to = List(Email("foo@bar.baz")),
+              cc = List(Email("cc@example.com")),
+              bcc = List(Email("bcc1@example.com"), Email("bcc2@example.com")),
+              body = Some("Hello there")
+            )
+            msgs = NonEmptyList(msg, List.fill(9)(msg))
+            tempEmailMessageRepo = PgEmailMessageRepo(db, tempChanId)
+            ids <- tempEmailMessageRepo.scheduleMessages(msgs)
+            emailMessageRepo = PgEmailMessageRepo(db, chanId)
+            commsService = CommsService(emailMessageRepo, emailSender)
+
+            result <- commsService.run.take(10).compile.drain.background.use { awaitFinished =>
+              for
+                _ <- commsService.backfill
+                streamResult <- awaitFinished
+                sent <- emailSender.getEmails
+                (sentIds, sentEmails) = sent.separate
+                dbEmails <- ids.traverse(emailMessageRepo.getMessage).map(_.flatten)
+              yield expect(dbEmails === msgs.map { x => (x, EmailStatus.Sent) }.toList) `and`
+                expect(sentEmails === msgs.toList) `and`
+                expect(sentIds === ids)
+            }
+          yield success
         }
       )
     )

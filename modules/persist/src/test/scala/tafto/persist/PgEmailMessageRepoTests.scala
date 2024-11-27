@@ -22,7 +22,7 @@ object PgEmailMessageRepoTests {
         val messageRepo = PgEmailMessageRepo(db, channelId)
         parSuite(
           List(
-            test("PgEmailMessageRepo.insertMessages can insert a single message") {
+            test("PgEmailMessageRepo.scheduleMessages can insert a single message") {
               val msg = EmailMessage(
                 subject = Some("Insert Single"),
                 to = List(Email("foo@bar.baz")),
@@ -35,7 +35,7 @@ object PgEmailMessageRepoTests {
                 messageFromDb <- messageRepo.getMessage(id)
               yield expect(messageFromDb === (msg, EmailStatus.Scheduled).some)
             },
-            test("PgEmailMessageRepo.insertMessages can insert a large batch of messages") {
+            test("PgEmailMessageRepo.scheduleMessages can insert a large batch of messages") {
               val testMessage = EmailMessage(
                 subject = Some("Insert Multi"),
                 to = List(Email("foo@bar.baz")),
@@ -45,11 +45,11 @@ object PgEmailMessageRepoTests {
               )
 
               val messages = NonEmptyList(testMessage, List.fill(10000)(testMessage))
-              messageRepo.insertMessages(messages).map { ids =>
+              messageRepo.scheduleMessages(messages).map { ids =>
                 expect(ids.size === messages.size)
               }
             },
-            test("PgEmailMessageRepo.insertMessages notifies on inserting messages") {
+            test("PgEmailMessageRepo.scheduleMessages notifies on inserting messages") {
               val testMessage = EmailMessage(
                 subject = Some("Insert Notifications"),
                 to = List(Email("foo@bar.baz")),
@@ -63,7 +63,7 @@ object PgEmailMessageRepoTests {
 
               TestChannelListener.make(db, channelId).use { messageStream =>
                 for
-                  ids <- messageRepo.insertMessages(messages)
+                  ids <- messageRepo.scheduleMessages(messages)
                   idSet = ids.map(_.value.show).toSet
                   receivedIds <- messageStream
                     .filter(idSet.contains)
@@ -139,6 +139,21 @@ object PgEmailMessageRepoTests {
                 marked <- messageRepo.markAsSent(id)
                 (_, status) <- getMessage(messageRepo)(id)
               yield expect(marked === false) `and` expect(status === EmailStatus.Scheduled)
+            },
+            test("PgEmailMessageRepo.getScheduledIds works correctly") {
+              val msg = EmailMessage(
+                subject = Some("Scheduled ids"),
+                to = List(Email("a@bar.baz")),
+                cc = List(Email("b@example.com")),
+                bcc = List(Email("c@example.com"), Email("d@example.com")),
+                body = Some("Yoyo.")
+              )
+              val msgs = NonEmptyList(msg, List.fill(9)(msg))
+
+              for
+                insertedIds <- messageRepo.scheduleMessages(msgs)
+                scheduledIds <- messageRepo.getScheduledIds
+              yield expect(insertedIds.toSet.subsetOf(scheduledIds.toSet))
             }
           )
         )
@@ -147,7 +162,7 @@ object PgEmailMessageRepoTests {
   }
 
   def insertMessage(repo: EmailMessageRepo[IO])(message: EmailMessage): IO[EmailMessage.Id] = for
-    ids <- repo.insertMessages(NonEmptyList.one(message))
+    ids <- repo.scheduleMessages(NonEmptyList.one(message))
     id <- ids match {
       case List(x) => x.pure[IO]
       case xs      => failure(s"expected single message, got $xs").failFast[IO] >> IO.never

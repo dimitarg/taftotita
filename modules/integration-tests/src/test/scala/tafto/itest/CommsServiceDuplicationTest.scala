@@ -37,6 +37,7 @@ object CommsServiceDuplicationTest:
         test(
           s"CommsService consumer prevents duplicate message delivery (message size = ${testCase.messageSize}, parallelism = ${testCase.parallelism})"
         ) {
+
           for
             chanId <- ChannelId("comms_dedupe_test").asIO
             emailSender <- RefBackedEmailSender.make[IO]

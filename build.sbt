@@ -16,6 +16,8 @@ def module(name: String): Project = Project(id = s"tafto-${name}",  base = file(
   .settings(
     scalacOptions ++= Seq(
       "-source:future",
+      // ??? for some reason unused warnings don't work inside for comprehensions, need to investigate why.
+      "-Wunused:all",
     ),
     Test / fork := true,
     run / fork := true,
