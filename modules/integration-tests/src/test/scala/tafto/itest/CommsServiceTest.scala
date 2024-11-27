@@ -1,5 +1,7 @@
 package tafto.itest
 
+import scala.concurrent.duration.*
+
 import cats.implicits.*
 import cats.effect.*
 import io.github.iltotore.iron.*
@@ -107,6 +109,34 @@ object CommsServiceTest:
               yield expect(dbEmails === msgs.map { x => (x, EmailStatus.Sent) }.toList) `and`
                 expect(sentEmails === msgs.toList) `and`
                 expect(sentIds === ids)
+            }
+          yield success
+        },
+        test("backfillAndRun makes backfill visible to run()") {
+          for
+            chanId <- ChannelId("backfill_test").asIO
+            tempChanId <- ChannelId("backfill_test_tmp").asIO
+            emailSender <- RefBackedEmailSender.make[IO]
+            msg = EmailMessage(
+              subject = Some("Comms error test"),
+              to = List(Email("foo@bar.baz")),
+              cc = List(Email("cc@example.com")),
+              bcc = List(Email("bcc1@example.com"), Email("bcc2@example.com")),
+              body = Some("Hello there")
+            )
+            msgs = NonEmptyList(msg, List.fill(9)(msg))
+            tempEmailMessageRepo = PgEmailMessageRepo(db, tempChanId)
+            backfillIds <- tempEmailMessageRepo.scheduleMessages(msgs)
+
+            emailMessageRepo = PgEmailMessageRepo(db, chanId)
+            commsService = CommsService(emailMessageRepo, emailSender)
+
+            result <- commsService.backfillAndRun.background.use { consumerHandle =>
+              for
+                liveIds <- commsService.scheduleEmails(msgs)
+                sent <- emailSender.waitForIdleAndGetEmails(5.seconds)
+                (sentIds, _) = sent.separate
+              yield expect(sentIds.toSet === (backfillIds ++ liveIds).toSet)
             }
           yield success
         }
