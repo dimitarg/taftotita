@@ -4,7 +4,6 @@ import scala.concurrent.duration.*
 
 import cats.implicits.*
 import cats.effect.*
-import io.github.iltotore.iron.*
 import tafto.persist.*
 import fs2.*
 import weaver.pure.*
@@ -19,6 +18,10 @@ import _root_.cats.data.NonEmptyList
 import tafto.service.comms.EmailSender
 import tafto.domain.EmailMessage.Id
 import _root_.io.github.iltotore.iron.cats.given
+import _root_.io.github.iltotore.iron.*
+import _root_.io.github.iltotore.iron.constraint.numeric.*
+import _root_.cats.MonadThrow
+import tafto.service.util.Retry
 
 object CommsServiceTest:
 
@@ -139,6 +142,59 @@ object CommsServiceTest:
               yield expect(sentIds.toSet === (backfillIds ++ liveIds).toSet)
             }
           yield success
+        },
+        test("Email sending is retried in case of an error") {
+          for
+            chanId <- ChannelId("error_retry_test").asIO
+            emailSender <- FlakyEmailSender.make[IO](timesToFail = 2)
+            emailMessageRepo = PgEmailMessageRepo(db, chanId)
+            retryPolicy = Retry.fullJitter[IO](maxRetries = 3, baseDelay = 2.millis)
+            commsService = CommsService(emailMessageRepo, EmailSender.retrying(retryPolicy)(emailSender))
+
+            msg = EmailMessage(
+              subject = Some("Comms error retry test"),
+              to = List(Email("foo@bar.baz")),
+              cc = List(Email("cc@example.com")),
+              bcc = List(Email("bcc1@example.com"), Email("bcc2@example.com")),
+              body = Some("Hello there")
+            )
+
+            result <- commsService.run.take(1).compile.drain.background.use { awaitFinished =>
+              for
+                scheduledIds <- commsService.scheduleEmails(NonEmptyList.one(msg))
+                _ <- awaitFinished.flatMap(_.embedError)
+                dbEmails <- scheduledIds.traverse(emailMessageRepo.getMessage).map(_.flatten)
+                (sentIds, sentEmails) <- emailSender.underlying.getEmails.map(_.separate)
+              yield expect(dbEmails === List((msg, EmailStatus.Sent))) `and`
+                expect(sentEmails === List(msg)) `and`
+                expect(sentIds === scheduledIds)
+            }
+          yield result
         }
       )
     )
+
+  final case class FlakyEmailSender[F[_]: MonadThrow, Underlying <: EmailSender[F]] private (
+      underlying: Underlying,
+      private val count: Ref[F, Int],
+      private val timesToFail: Int :| Positive
+  ) extends EmailSender[F]:
+    override def sendEmail(id: Id, email: EmailMessage): F[Unit] =
+      count.updateAndGet(_ + 1).flatMap { cnt =>
+        if (cnt > timesToFail) {
+          underlying.sendEmail(id, email)
+        } else {
+          MonadThrow[F].raiseError(new RuntimeException("Flaky email sender."))
+        }
+      }
+
+  object FlakyEmailSender {
+    def make[F[_]: Sync](timesToFail: Int :| Positive): F[FlakyEmailSender[F, RefBackedEmailSender[F]]] = for
+      underlying <- RefBackedEmailSender.make[F]
+      count <- Ref.of(0)
+    yield FlakyEmailSender(
+      underlying = underlying,
+      timesToFail = timesToFail,
+      count = count
+    )
+  }

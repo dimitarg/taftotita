@@ -27,7 +27,7 @@ final case class PgEmailMessageRepo[F[_]: Clock: MonadCancelThrow](
       for
         now <- Time[F].utc
         result <- Database.batched(s)(EmailMessageQueries.insertMessages)(messages.map { x =>
-          (x, EmailStatus.Scheduled, 0, now)
+          (x, EmailStatus.Scheduled, now)
         })
         _ <- notify(s, result)
       yield result
@@ -57,7 +57,7 @@ final case class PgEmailMessageRepo[F[_]: Clock: MonadCancelThrow](
     result <- database.pool.use { s =>
       for
         command <- s.prepare(EmailMessageQueries.updateStatusAndError)
-        completion <- command.execute((EmailStatus.Error, now, error, 1, id, EmailStatus.Claimed))
+        completion <- command.execute((EmailStatus.Error, now, error, id, EmailStatus.Claimed))
         result = wasUpdated(completion)
       yield result
     }
@@ -114,12 +114,12 @@ object EmailMessageQueries {
     (nonEmptyText.opt *: toList(_email) *: toList(_email) *: toList(_email) *: nonEmptyText.opt)
       .to[EmailMessage]
 
-  val insertEmailEncoder = domainEmailMessageCodec *: emailStatus *: int4 *: timestamptz
+  val insertEmailEncoder = domainEmailMessageCodec *: emailStatus *: timestamptz
 
   def insertMessages(size: Int) = {
 
     sql"""
-      insert into email_messages(subject, to_, cc, bcc, body, status, num_attempts, created_at)
+      insert into email_messages(subject, to_, cc, bcc, body, status, created_at)
       values ${insertEmailEncoder.values.list(size)}
       returning id;
     """.query(emailMessageId)
@@ -139,7 +139,7 @@ object EmailMessageQueries {
   """.command
 
   val updateStatusAndError = sql"""
-    update email_messages set status=${emailStatus}, last_attempted_at=${timestamptz}, error=${text}, num_attempts = num_attempts + ${int4}
+    update email_messages set status=${emailStatus}, last_attempted_at=${timestamptz}, error=${text}
     where id=${emailMessageId} and status=${emailStatus};
   """.command
 

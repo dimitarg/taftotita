@@ -32,7 +32,6 @@ create table email_messages(
   bcc text[] not null,
   body text,
   status email_status,
-  num_attempts int,
   error text,
   created_at timestamptz not null,
   last_attempted_at timestamptz
