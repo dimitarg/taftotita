@@ -152,7 +152,8 @@ object PgEmailMessageRepoTests {
 
               for
                 insertedIds <- messageRepo.scheduleMessages(msgs)
-                scheduledIds <- messageRepo.getScheduledIds
+                now <- Time[IO].utc
+                scheduledIds <- messageRepo.getScheduledIds(now)
               yield expect(insertedIds.toSet.subsetOf(scheduledIds.toSet))
             }
           )

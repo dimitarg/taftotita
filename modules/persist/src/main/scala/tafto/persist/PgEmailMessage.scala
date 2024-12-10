@@ -11,5 +11,5 @@ final case class PgEmailMessage(
     numAttempts: Int,
     error: Option[String],
     createdAt: OffsetDateTime,
-    lastAttemptedAt: Option[OffsetDateTime]
+    lastUpdatedAt: Option[OffsetDateTime]
 )

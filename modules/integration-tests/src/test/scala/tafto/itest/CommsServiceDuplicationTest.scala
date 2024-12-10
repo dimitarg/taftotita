@@ -9,7 +9,7 @@ import io.github.iltotore.iron.constraint.numeric.Positive
 import tafto.persist.*
 import fs2.*
 import weaver.pure.*
-import tafto.service.comms.CommsService
+import tafto.service.comms.{CommsService, PollingConfig}
 import tafto.util.*
 import tafto.domain.*
 import tafto.itest.util.*
@@ -43,7 +43,7 @@ object CommsServiceDuplicationTest:
             emailSender <- RefBackedEmailSender.make[IO]
 
             emailMessageRepo = PgEmailMessageRepo(db, chanId)
-            commsService = CommsService(emailMessageRepo, emailSender)
+            commsService = CommsService(emailMessageRepo, emailSender, PollingConfig.default)
 
             commsServiceConsumerInstances = Stream
               .emits(List.fill(testCase.parallelism)(commsService.run))

@@ -42,8 +42,8 @@ final case class PgEmailMessageRepo[F[_]: Clock: MonadCancelThrow](
       s.option(EmailMessageQueries.getMessage)(id)
     }
 
-  override val getScheduledIds: F[List[EmailMessage.Id]] = database.pool.use { s =>
-    s.execute(EmailMessageQueries.getMessageIdsInStatus)(EmailStatus.Scheduled)
+  override def getScheduledIds(scheduledAtOrBefore: OffsetDateTime): F[List[EmailMessage.Id]] = database.pool.use { s =>
+    s.execute(EmailMessageQueries.getScheduledIds)(scheduledAtOrBefore)
   }
 
   override def claim(id: EmailMessage.Id): F[Option[EmailMessage]] =
@@ -128,16 +128,18 @@ object EmailMessageQueries {
       select subject, to_, cc, bcc, body, status from email_messages where id = ${emailMessageId};
     """.query(domainEmailMessageCodec *: emailStatus)
 
-  val getMessageIdsInStatus = sql"""
-    select id from email_messages where status = ${emailStatus};
-  """.query(emailMessageId)
+  val getScheduledIds = sql"""
+    select id from email_messages where status = ${emailStatus} and created_at <= ${timestamptz};
+  """
+    .query(emailMessageId)
+    .contramap[OffsetDateTime] { case createdAt => (EmailStatus.Scheduled, createdAt) }
 
   val updateStatus = sql"""
     with ids as (
       select id from email_messages where id=${emailMessageId} and status=${emailStatus}
       for update skip locked
     )
-    update email_messages m set status=${emailStatus}, last_attempted_at=${timestamptz}
+    update email_messages m set status=${emailStatus}, last_updated_at=${timestamptz}
     from ids
     where m.id = ids.id;
   """.command.contramap[UpdateStatus] { updateStatus =>
@@ -149,7 +151,7 @@ object EmailMessageQueries {
       select id from email_messages where id=${emailMessageId} and status=${emailStatus}
       for update skip locked
     )
-    update email_messages m set status=${emailStatus}, last_attempted_at=${timestamptz}, error=${text}
+    update email_messages m set status=${emailStatus}, last_updated_at=${timestamptz}, error=${text}
     from ids
     where m.id = ids.id;
   """.command.contramap[(UpdateStatus, String)] { (updateStatus, errorMessage) =>
@@ -161,7 +163,7 @@ object EmailMessageQueries {
       select id from email_messages where id=${emailMessageId} and status=${emailStatus}
       for update skip locked
     )
-    update email_messages m set status=${emailStatus}, last_attempted_at=${timestamptz}
+    update email_messages m set status=${emailStatus}, last_updated_at=${timestamptz}
     from ids
     where m.id = ids.id
     returning subject, to_, cc, bcc, body;
@@ -171,7 +173,7 @@ object EmailMessageQueries {
 
 }
 
-final case class UpdateStatus(
+final case class UpdateStatus private (
     id: EmailMessage.Id,
     currentStatus: EmailStatus,
     newStatus: EmailStatus,

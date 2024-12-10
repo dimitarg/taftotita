@@ -1,13 +1,15 @@
 package tafto.service.comms
 
+import scala.concurrent.duration.*
+
 import tafto.domain.*
 import cats.effect.*
 import fs2.Stream
 import cats.data.NonEmptyList
-import cats.MonadThrow
 import cats.implicits.*
 import cats.effect.implicits.*
 import io.odin.Logger
+import tafto.util.Time
 
 trait CommsService[F[_]]:
   /** Delivery semantics - eventual at-least-once delivery. That is to say, if the effect executes successfully, the
@@ -17,21 +19,22 @@ trait CommsService[F[_]]:
 
   def run: Stream[F, Unit]
 
-  def backfill: F[Unit]
+  def pollForScheduledMessages: Stream[F, Unit]
 
-  def backfillAndRun(using concurrent: Concurrent[F]): F[Unit] =
+  def backfillAndRun(using c: Concurrent[F]): F[Unit] =
     run.compile.drain.background.use { x =>
       for
-        _ <- backfill
+        _ <- pollForScheduledMessages.compile.drain
         outcome <- x
         result <- outcome.embedError
       yield result
     }
 
 object CommsService:
-  def apply[F[_]: MonadThrow: Logger](
+  def apply[F[_]: Temporal: Logger](
       emailMessageRepo: EmailMessageRepo[F],
-      emailSender: EmailSender[F]
+      emailSender: EmailSender[F],
+      pollingConfig: PollingConfig
   ): CommsService[F] =
     new CommsService[F] {
 
@@ -85,6 +88,29 @@ object CommsService:
             }
         yield ()
 
-      override val backfill: F[Unit] =
-        emailMessageRepo.getScheduledIds.flatMap(emailMessageRepo.notify)
+      override val pollForScheduledMessages: Stream[F, Unit] =
+        Stream.fixedRateStartImmediately(30.seconds).evalMap { _ =>
+          for
+            now <- Time[F].utc
+            scheduledIds <- emailMessageRepo.getScheduledIds(now.minusMinutes(1))
+            _ <- emailMessageRepo.notify(scheduledIds)
+          yield ()
+        }
     }
+
+final case class PollingConfig(
+    forScheduled: ScheduledMessagesPollingConfig
+)
+
+object PollingConfig:
+  val default: PollingConfig = PollingConfig(
+    forScheduled = ScheduledMessagesPollingConfig(
+      messageAge = 1.minute,
+      pollingInterval = 30.seconds
+    )
+  )
+
+final case class ScheduledMessagesPollingConfig(
+    messageAge: FiniteDuration,
+    pollingInterval: FiniteDuration
+)

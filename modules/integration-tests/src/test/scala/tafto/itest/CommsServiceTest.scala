@@ -7,7 +7,7 @@ import cats.effect.*
 import tafto.persist.*
 import fs2.*
 import weaver.pure.*
-import tafto.service.comms.CommsService
+import tafto.service.comms.{CommsService, PollingConfig}
 import tafto.domain.*
 import tafto.util.*
 import tafto.itest.util.*
@@ -36,7 +36,7 @@ object CommsServiceTest:
             emailSender <- RefBackedEmailSender.make[IO]
 
             emailMessageRepo = PgEmailMessageRepo(db, chanId)
-            commsService = CommsService(emailMessageRepo, emailSender)
+            commsService = CommsService(emailMessageRepo, emailSender, PollingConfig.default)
 
             msg = EmailMessage(
               subject = Some("Comms baseline test"),
@@ -65,7 +65,7 @@ object CommsServiceTest:
           for
             chanId <- ChannelId("error_test").asIO
             emailMessageRepo = PgEmailMessageRepo(db, chanId)
-            commsService = CommsService(emailMessageRepo, emailSender)
+            commsService = CommsService(emailMessageRepo, emailSender, PollingConfig.default)
 
             msg = EmailMessage(
               subject = Some("Comms error test"),
@@ -84,7 +84,7 @@ object CommsServiceTest:
             }
           yield result
         },
-        test("Backfill publishes scheduled entities to channel") {
+        test("pollForScheduledMessages publishes scheduled entities to channel") {
           for
             chanId <- ChannelId("backfill_test").asIO
             tempChanId <- ChannelId("backfill_test_tmp").asIO
@@ -100,11 +100,11 @@ object CommsServiceTest:
             tempEmailMessageRepo = PgEmailMessageRepo(db, tempChanId)
             ids <- tempEmailMessageRepo.scheduleMessages(msgs)
             emailMessageRepo = PgEmailMessageRepo(db, chanId)
-            commsService = CommsService(emailMessageRepo, emailSender)
+            commsService = CommsService(emailMessageRepo, emailSender, PollingConfig.default)
 
             result <- commsService.run.take(10).compile.drain.background.use { awaitFinished =>
               for
-                _ <- commsService.backfill
+                _ <- commsService.pollForScheduledMessages.take(1).compile.drain
                 streamResult <- awaitFinished
                 sent <- emailSender.getEmails
                 (sentIds, sentEmails) = sent.separate
@@ -132,7 +132,7 @@ object CommsServiceTest:
             backfillIds <- tempEmailMessageRepo.scheduleMessages(msgs)
 
             emailMessageRepo = PgEmailMessageRepo(db, chanId)
-            commsService = CommsService(emailMessageRepo, emailSender)
+            commsService = CommsService(emailMessageRepo, emailSender, PollingConfig.default)
 
             result <- commsService.backfillAndRun.background.use { consumerHandle =>
               for
@@ -149,7 +149,11 @@ object CommsServiceTest:
             emailSender <- FlakyEmailSender.make[IO](timesToFail = 2)
             emailMessageRepo = PgEmailMessageRepo(db, chanId)
             retryPolicy = Retry.fullJitter[IO](maxRetries = 3, baseDelay = 2.millis)
-            commsService = CommsService(emailMessageRepo, EmailSender.retrying(retryPolicy)(emailSender))
+            commsService = CommsService(
+              emailMessageRepo,
+              EmailSender.retrying(retryPolicy)(emailSender),
+              PollingConfig.default
+            )
 
             msg = EmailMessage(
               subject = Some("Comms error retry test"),
