@@ -23,17 +23,18 @@ import _root_.io.github.iltotore.iron.*
 import _root_.io.github.iltotore.iron.constraint.numeric.*
 import tafto.service.util.Retry
 import monocle.syntax.all.*
+import tafto.persist.testutil.ChannelIdGenerator
 
 object CommsServiceTest:
 
-  def tests(db: Database[IO])(using
+  def tests(db: Database[IO], channelGen: ChannelIdGenerator[IO])(using
       logger: Logger[IO]
   ): Stream[IO, Test] =
     seqSuite(
       List(
         test("Scheduling an email persists and eventually sends email") {
           for
-            chanId <- ChannelId("baseline_test").asIO
+            chanId <- channelGen.next
             emailSender <- RefBackedEmailSender.make[IO]
 
             emailMessageRepo = PgEmailMessageRepo(db, chanId)
@@ -64,7 +65,7 @@ object CommsServiceTest:
             IO.raiseError(new RuntimeException("Failed I have."))
           }
           for
-            chanId <- ChannelId("error_test").asIO
+            chanId <- channelGen.next
             emailMessageRepo = PgEmailMessageRepo(db, chanId)
             commsService = CommsService(emailMessageRepo, emailSender, PollingConfig.default)
 
@@ -87,8 +88,8 @@ object CommsServiceTest:
         },
         test("pollForScheduledMessages publishes scheduled entities to channel") {
           for
-            chanId <- ChannelId("poll_for_scheduled_test").asIO
-            tempChanId <- ChannelId("poll_for_scheduled_test_tmp").asIO
+            chanId <- channelGen.next
+            tempChanId <- channelGen.next
             emailSender <- RefBackedEmailSender.make[IO]
             msg = EmailMessage(
               subject = Some("Comms error test"),
@@ -125,7 +126,7 @@ object CommsServiceTest:
         },
         test("pollForClaimedMessages processes claimed messages for which TTL has expired") {
           for
-            chanId <- ChannelId("poll_for_claimed_test_tmp").asIO
+            chanId <- channelGen.next
             emailSender <- RefBackedEmailSender.make[IO]
             msg = EmailMessage(
               subject = Some("Comms - reschedule claimed test"),
@@ -178,8 +179,8 @@ object CommsServiceTest:
         },
         test("backfillAndRun makes backfill visible to run()") {
           for
-            chanId <- ChannelId("backfill_and_run_test").asIO
-            tempChanId <- ChannelId("backfill_and_run_test_tmp").asIO
+            chanId <- channelGen.next
+            tempChanId <- channelGen.next
             emailSender <- RefBackedEmailSender.make[IO]
             msg = EmailMessage(
               subject = Some("Comms error test"),
@@ -206,7 +207,7 @@ object CommsServiceTest:
         },
         test("Email sending is retried in case of an error") {
           for
-            chanId <- ChannelId("error_retry_test").asIO
+            chanId <- channelGen.next
             emailSender <- FlakyEmailSender.make[IO](timesToFail = 2)
             emailMessageRepo = PgEmailMessageRepo(db, chanId)
             retryPolicy = Retry.fullJitter[IO](maxRetries = 3, baseDelay = 2.millis)

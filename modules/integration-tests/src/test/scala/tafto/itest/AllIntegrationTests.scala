@@ -1,6 +1,7 @@
 package tafto.itest
 
 import cats.effect.*
+import cats.implicits.*
 import fs2.Stream
 import weaver.pure.*
 import tafto.persist.Database
@@ -8,6 +9,7 @@ import tafto.testcontainers.Postgres
 import natchez.Trace
 import tafto.db.DatabaseMigrator
 import tafto.log.defaultLogger
+import tafto.persist.testutil.ChannelIdGenerator
 import io.odin.Logger
 
 object AllIntegrationTests extends Suite:
@@ -22,13 +24,15 @@ object AllIntegrationTests extends Suite:
     _ <- Resource.eval(DatabaseMigrator.migrate(config))
   } yield db
 
+  val channelIdGen = Resource.eval(ChannelIdGenerator.make[IO])
+
   override def suitesStream: Stream[IO, Test] =
-    Stream.resource(dbResource).flatMap { db =>
+    Stream.resource((dbResource, channelIdGen).tupled).flatMap { (db, channelGen) =>
       // Resource-heavy suites that should be run in sequence before others
-      CommsServiceDuplicationTest.tests(db) ++
+      CommsServiceDuplicationTest.tests(db, channelGen) ++
         // Suites to run in parallel
         Stream(
-          CommsServiceTest.tests(db)
+          CommsServiceTest.tests(db, channelGen)
         ).parJoinUnbounded
 
     }

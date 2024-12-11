@@ -15,6 +15,7 @@ import tafto.domain.*
 import tafto.itest.util.*
 
 import _root_.io.odin.Logger
+import tafto.persist.testutil.ChannelIdGenerator
 
 object CommsServiceDuplicationTest:
 
@@ -29,7 +30,7 @@ object CommsServiceDuplicationTest:
     TestCase(messageSize = 1000, parallelism = 8)
   )
 
-  def tests(db: Database[IO])(using
+  def tests(db: Database[IO], channelGen: ChannelIdGenerator[IO])(using
       logger: Logger[IO]
   ): Stream[IO, Test] =
     seqSuite(
@@ -39,7 +40,7 @@ object CommsServiceDuplicationTest:
         ) {
 
           for
-            chanId <- ChannelId("comms_dedupe_test").asIO
+            chanId <- channelGen.next
             emailSender <- RefBackedEmailSender.make[IO]
 
             emailMessageRepo = PgEmailMessageRepo(db, chanId)

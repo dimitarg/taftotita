@@ -114,7 +114,7 @@ lazy val localDev = module("local-dev")
   .dependsOn(migrations, persist, restServer, crypto, testContainers)
 
 lazy val integrationTests = module("integration-tests")
-  .dependsOn(migrations, persist, restServer, crypto, testContainers)
+  .dependsOn(migrations, persist % "compile->compile;test->test", restServer, crypto, testContainers)
 
 // make sure any test projects spinning up docker containers run in sequence, so resource usage stays sane.
 (integrationTests / test) := ((integrationTests / Test / test) dependsOn (persist / Test / test)).value
