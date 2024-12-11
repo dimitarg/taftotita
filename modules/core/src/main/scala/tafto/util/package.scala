@@ -27,3 +27,11 @@ package object util:
     def errorAsThrowable: Either[Throwable, A] = either.leftMap(x => new RuntimeException(x)).leftWiden[Throwable]
     def orThrow[F[_]: MonadThrow]: F[A] = MonadThrow[F].fromEither(errorAsThrowable)
     def asIO: IO[A] = orThrow[IO]
+
+  def safeMatch[A, B](x: A)(f: PartialFunction[A, B])(error: A => String): Either[String, B] = {
+    if (f.isDefinedAt(x)) {
+      f(x).asRight
+    } else {
+      error(x).asLeft
+    }
+  }

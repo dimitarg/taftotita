@@ -8,7 +8,6 @@ import skunk.codec.all.*
 import tafto.persist.codecs.*
 import tafto.util.*
 import java.time.OffsetDateTime
-import cats.effect.kernel.Clock
 import cats.data.NonEmptyList
 import skunk.data.Identifier
 import cats.effect.kernel.MonadCancelThrow
@@ -17,8 +16,9 @@ import io.github.iltotore.iron.cats.given
 import tafto.service.comms.EmailMessageRepo
 import skunk.data.Completion
 import skunk.Session
+import tafto.domain.EmailMessage.Id
 
-final case class PgEmailMessageRepo[F[_]: Clock: MonadCancelThrow](
+final case class PgEmailMessageRepo[F[_]: Time: MonadCancelThrow](
     database: Database[F],
     channelId: Identifier
 ) extends EmailMessageRepo[F]:
@@ -44,6 +44,10 @@ final case class PgEmailMessageRepo[F[_]: Clock: MonadCancelThrow](
 
   override def getScheduledIds(scheduledAtOrBefore: OffsetDateTime): F[List[EmailMessage.Id]] = database.pool.use { s =>
     s.execute(EmailMessageQueries.getScheduledIds)(scheduledAtOrBefore)
+  }
+
+  override def getClaimedIds(claimedAtOrBefore: OffsetDateTime): F[List[Id]] = database.pool.use { s =>
+    s.execute(EmailMessageQueries.getClaimedIds)(claimedAtOrBefore)
   }
 
   override def claim(id: EmailMessage.Id): F[Option[EmailMessage]] =
@@ -134,12 +138,18 @@ object EmailMessageQueries {
     .query(emailMessageId)
     .contramap[OffsetDateTime] { case createdAt => (EmailStatus.Scheduled, createdAt) }
 
+  val getClaimedIds = sql"""
+    select id from email_messages where status = ${emailStatus} and updated_at <= ${timestamptz};
+  """
+    .query(emailMessageId)
+    .contramap[OffsetDateTime] { case updatedAt => (EmailStatus.Claimed, updatedAt) }
+
   val updateStatus = sql"""
     with ids as (
       select id from email_messages where id=${emailMessageId} and status=${emailStatus}
       for update skip locked
     )
-    update email_messages m set status=${emailStatus}, last_updated_at=${timestamptz}
+    update email_messages m set status=${emailStatus}, updated_at=${timestamptz}
     from ids
     where m.id = ids.id;
   """.command.contramap[UpdateStatus] { updateStatus =>
@@ -151,7 +161,7 @@ object EmailMessageQueries {
       select id from email_messages where id=${emailMessageId} and status=${emailStatus}
       for update skip locked
     )
-    update email_messages m set status=${emailStatus}, last_updated_at=${timestamptz}, error=${text}
+    update email_messages m set status=${emailStatus}, updated_at=${timestamptz}, error=${text}
     from ids
     where m.id = ids.id;
   """.command.contramap[(UpdateStatus, String)] { (updateStatus, errorMessage) =>
@@ -163,7 +173,7 @@ object EmailMessageQueries {
       select id from email_messages where id=${emailMessageId} and status=${emailStatus}
       for update skip locked
     )
-    update email_messages m set status=${emailStatus}, last_updated_at=${timestamptz}
+    update email_messages m set status=${emailStatus}, updated_at=${timestamptz}
     from ids
     where m.id = ids.id
     returning subject, to_, cc, bcc, body;

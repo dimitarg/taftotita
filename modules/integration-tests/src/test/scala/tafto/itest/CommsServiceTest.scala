@@ -1,5 +1,6 @@
 package tafto.itest
 
+import java.time.*
 import scala.concurrent.duration.*
 
 import cats.implicits.*
@@ -22,13 +23,14 @@ import _root_.io.github.iltotore.iron.*
 import _root_.io.github.iltotore.iron.constraint.numeric.*
 import _root_.cats.MonadThrow
 import tafto.service.util.Retry
+import monocle.syntax.all.*
 
 object CommsServiceTest:
 
   def tests(db: Database[IO])(using
       logger: Logger[IO]
   ): Stream[IO, Test] =
-    parSuite(
+    seqSuite(
       List(
         test("Scheduling an email persists and eventually sends email") {
           for
@@ -86,8 +88,8 @@ object CommsServiceTest:
         },
         test("pollForScheduledMessages publishes scheduled entities to channel") {
           for
-            chanId <- ChannelId("backfill_test").asIO
-            tempChanId <- ChannelId("backfill_test_tmp").asIO
+            chanId <- ChannelId("poll_for_scheduled_test").asIO
+            tempChanId <- ChannelId("poll_for_scheduled_test_tmp").asIO
             emailSender <- RefBackedEmailSender.make[IO]
             msg = EmailMessage(
               subject = Some("Comms error test"),
@@ -99,6 +101,13 @@ object CommsServiceTest:
             msgs = NonEmptyList(msg, List.fill(9)(msg))
             tempEmailMessageRepo = PgEmailMessageRepo(db, tempChanId)
             ids <- tempEmailMessageRepo.scheduleMessages(msgs)
+            longAgo = OffsetDateTime.ofInstant(Instant.ofEpochMilli(42), ZoneOffset.UTC)
+            _ <- db.transact { s =>
+              ids.traverse { id =>
+                // make sure scheduled message is sufficiently aged so it gets picked up
+                s.execute(TestQueries.updateMessageTimestamps)((longAgo, None, id))
+              }
+            }
             emailMessageRepo = PgEmailMessageRepo(db, chanId)
             commsService = CommsService(emailMessageRepo, emailSender, PollingConfig.default)
 
@@ -115,10 +124,63 @@ object CommsServiceTest:
             }
           yield success
         },
+        test("pollForClaimedMessages processes claimed messages for which TTL has expired") {
+          for
+            chanId <- ChannelId("poll_for_claimed_test_tmp").asIO
+            emailSender <- RefBackedEmailSender.make[IO]
+            msg = EmailMessage(
+              subject = Some("Comms - reschedule claimed test"),
+              to = List(Email("foo@bar.baz")),
+              cc = List(Email("cc@example.com")),
+              bcc = List(Email("bcc1@example.com"), Email("bcc2@example.com")),
+              body = Some("Hello there")
+            )
+            msgs = NonEmptyList(msg, List.fill(3)(msg))
+            tempEmailMessageRepo = PgEmailMessageRepo(db, chanId)
+            ids <- tempEmailMessageRepo.scheduleMessages(msgs)
+
+            (id1, id2, id3, id4) <- safeMatch(ids) { case w :: x :: y :: z :: Nil =>
+              (w, x, y, z)
+            } { xs =>
+              s"expected four elements, got $xs"
+            }.asIO
+
+            longAgo = OffsetDateTime.ofInstant(Instant.ofEpochMilli(42), ZoneOffset.UTC)
+
+            _ <- db.transact { s =>
+              for
+                // id1 has expired ttl and is in status claimed - should be processed
+                _ <- s.execute(TestQueries.updateMessageTimestamps)((longAgo, longAgo.some, id1))
+                _ <- s.execute(TestQueries.updateMessageStatus)((EmailStatus.Claimed, id1))
+                // id2 has expired ttl but not claimed - should not be processed
+                _ <- s.execute(TestQueries.updateMessageTimestamps)((longAgo, longAgo.some, id2))
+                // id3 is claimed but has ttl not expired yet - should not be processed
+                _ <- s.execute(TestQueries.updateMessageStatus)((EmailStatus.Claimed, id3))
+              // id4 is neither claimed nor has ttl expired - should not be processed
+              yield ()
+            }
+
+            emailMessageRepo = PgEmailMessageRepo(db, chanId)
+            pollingConfig = PollingConfig.default
+              .focus(_.forClaimed.timeToLive)
+              .replace(1.hour)
+            commsService = CommsService(emailMessageRepo, emailSender, pollingConfig)
+
+            _ <- commsService.pollForClaimedMessages.take(1).compile.drain
+            (sentIds, _) <- emailSender.getEmails.map(_.separate)
+            maybeMessageFromDb <- emailMessageRepo.getMessage(id1)
+            messageStatus <- safeMatch(maybeMessageFromDb) { case Some((_, status)) =>
+              status
+            } { x =>
+              s"Expected Some, got $x"
+            }.asIO
+          yield expect(messageStatus === EmailStatus.Sent) `and` expect(sentIds.toSet === Set(id1))
+
+        },
         test("backfillAndRun makes backfill visible to run()") {
           for
-            chanId <- ChannelId("backfill_test").asIO
-            tempChanId <- ChannelId("backfill_test_tmp").asIO
+            chanId <- ChannelId("backfill_and_run_test").asIO
+            tempChanId <- ChannelId("backfill_and_run_test_tmp").asIO
             emailSender <- RefBackedEmailSender.make[IO]
             msg = EmailMessage(
               subject = Some("Comms error test"),
@@ -134,7 +196,7 @@ object CommsServiceTest:
             emailMessageRepo = PgEmailMessageRepo(db, chanId)
             commsService = CommsService(emailMessageRepo, emailSender, PollingConfig.default)
 
-            result <- commsService.backfillAndRun.background.use { consumerHandle =>
+            result <- commsService.backfillAndRun.compile.drain.background.use { consumerHandle =>
               for
                 liveIds <- commsService.scheduleEmails(msgs)
                 sent <- emailSender.waitForIdleAndGetEmails(5.seconds)
@@ -193,7 +255,7 @@ object CommsServiceTest:
       }
 
   object FlakyEmailSender {
-    def make[F[_]: Sync](timesToFail: Int :| Positive): F[FlakyEmailSender[F, RefBackedEmailSender[F]]] = for
+    def make[F[_]: Sync: Logger](timesToFail: Int :| Positive): F[FlakyEmailSender[F, RefBackedEmailSender[F]]] = for
       underlying <- RefBackedEmailSender.make[F]
       count <- Ref.of(0)
     yield FlakyEmailSender(

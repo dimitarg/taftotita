@@ -34,5 +34,5 @@ create table email_messages(
   status email_status,
   error text,
   created_at timestamptz not null,
-  last_updated_at timestamptz
+  updated_at timestamptz
 );

@@ -12,6 +12,7 @@ import io.odin.Logger
 import tafto.util.Time
 
 trait CommsService[F[_]]:
+
   /** Delivery semantics - eventual at-least-once delivery. That is to say, if the effect executes successfully, the
     * email will have been scheduled for delivery, in a persistent way that would survive across i.e. service restart.
     */
@@ -21,14 +22,11 @@ trait CommsService[F[_]]:
 
   def pollForScheduledMessages: Stream[F, Unit]
 
-  def backfillAndRun(using c: Concurrent[F]): F[Unit] =
-    run.compile.drain.background.use { x =>
-      for
-        _ <- pollForScheduledMessages.compile.drain
-        outcome <- x
-        result <- outcome.embedError
-      yield result
-    }
+  def pollForClaimedMessages: Stream[F, Unit]
+
+  def backfillAndRun(using c: Concurrent[F]): Stream[F, Unit] =
+    Stream(pollForScheduledMessages, pollForClaimedMessages).parJoinUnbounded
+      .concurrently(run)
 
 object CommsService:
   def apply[F[_]: Temporal: Logger](
@@ -58,10 +56,13 @@ object CommsService:
                 s"Could not claim message $id for sending as it was already claimed by another process, or does not exist."
               )
             case Some(message) =>
-              for
-                sendEmailResult <- emailSender.sendEmail(id, message).attempt
-                _ <- sendEmailResult.fold(markAsError(id, _), _ => markAsSent(id))
-              yield ()
+              processClaimedMessage(id, message)
+        yield ()
+
+      private def processClaimedMessage(id: EmailMessage.Id, message: EmailMessage): F[Unit] =
+        for
+          sendEmailResult <- emailSender.sendEmail(id, message).attempt
+          _ <- sendEmailResult.fold(markAsError(id, _), _ => markAsSent(id))
         yield ()
 
       private def markAsSent(id: EmailMessage.Id): F[Unit] =
@@ -89,17 +90,43 @@ object CommsService:
         yield ()
 
       override val pollForScheduledMessages: Stream[F, Unit] =
-        Stream.fixedRateStartImmediately(30.seconds).evalMap { _ =>
+        Stream.fixedRateStartImmediately(pollingConfig.forScheduled.pollingInterval).evalMap { _ =>
           for
             now <- Time[F].utc
-            scheduledIds <- emailMessageRepo.getScheduledIds(now.minusMinutes(1))
+            scheduledIds <- emailMessageRepo
+              .getScheduledIds(now.minusNanos(pollingConfig.forScheduled.messageAge.toNanos))
             _ <- emailMessageRepo.notify(scheduledIds)
           yield ()
         }
+
+      override val pollForClaimedMessages: Stream[F, Unit] =
+        Stream.fixedRateStartImmediately(pollingConfig.forClaimed.pollingInterval).evalMap { _ =>
+          for
+            now <- Time[F].utc
+            claimedIds <- emailMessageRepo.getClaimedIds(now.minusNanos(pollingConfig.forClaimed.timeToLive.toNanos))
+            _ <- claimedIds.traverse(reprocessClaimedMessage)
+          yield ()
+        }
+
+      private def reprocessClaimedMessage(id: EmailMessage.Id): F[Unit] = for
+        msg <- emailMessageRepo.getMessage(id)
+        result <- msg.fold {
+          Logger[F].warn(s"Could not reprocess claimed message with id $id as it was not found")
+        } { case (message, status) =>
+          if (status === EmailStatus.Claimed) {
+            processClaimedMessage(id, message)
+          } else {
+            Logger[F].debug(
+              s"Will not reprocess message with id $id as it's no longer claimed, current status is $status"
+            )
+          }
+        }
+      yield result
     }
 
 final case class PollingConfig(
-    forScheduled: ScheduledMessagesPollingConfig
+    forScheduled: ScheduledMessagesPollingConfig,
+    forClaimed: ClaimedMessagesPollingConfig
 )
 
 object PollingConfig:
@@ -107,10 +134,19 @@ object PollingConfig:
     forScheduled = ScheduledMessagesPollingConfig(
       messageAge = 1.minute,
       pollingInterval = 30.seconds
+    ),
+    forClaimed = ClaimedMessagesPollingConfig(
+      timeToLive = 30.seconds,
+      pollingInterval = 30.seconds
     )
   )
 
 final case class ScheduledMessagesPollingConfig(
     messageAge: FiniteDuration,
+    pollingInterval: FiniteDuration
+)
+
+final case class ClaimedMessagesPollingConfig(
+    timeToLive: FiniteDuration,
     pollingInterval: FiniteDuration
 )

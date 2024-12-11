@@ -6,6 +6,7 @@ val testcontainersScalaVersion = "0.41.4"
 val ironVersion = "2.6.0"
 val http4sVersion = "0.23.29"
 val tapirVersion = "1.11.8"
+val monocleVersion = "3.1.0"
 
 def module(name: String): Project = Project(id = s"tafto-${name}",  base = file(s"modules/$name"))
   .settings(
@@ -41,6 +42,8 @@ lazy val core = module("core")
       // we depend on ciris in core because domain data types reuse `Secret` datatype.
       "is.cir" %% "ciris" % "3.6.0",
       "com.github.cb372" %% "cats-retry" % "3.1.3",
+      "dev.optics" %% "monocle-core"  % monocleVersion,
+      "dev.optics" %% "monocle-macro" % monocleVersion,
     )
   )
 
