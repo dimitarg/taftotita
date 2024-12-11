@@ -21,7 +21,6 @@ import tafto.domain.EmailMessage.Id
 import _root_.io.github.iltotore.iron.cats.given
 import _root_.io.github.iltotore.iron.*
 import _root_.io.github.iltotore.iron.constraint.numeric.*
-import _root_.cats.MonadThrow
 import tafto.service.util.Retry
 import monocle.syntax.all.*
 
@@ -239,28 +238,3 @@ object CommsServiceTest:
         }
       )
     )
-
-  final case class FlakyEmailSender[F[_]: MonadThrow, Underlying <: EmailSender[F]] private (
-      underlying: Underlying,
-      private val count: Ref[F, Int],
-      private val timesToFail: Int :| Positive
-  ) extends EmailSender[F]:
-    override def sendEmail(id: Id, email: EmailMessage): F[Unit] =
-      count.updateAndGet(_ + 1).flatMap { cnt =>
-        if (cnt > timesToFail) {
-          underlying.sendEmail(id, email)
-        } else {
-          MonadThrow[F].raiseError(new RuntimeException("Flaky email sender."))
-        }
-      }
-
-  object FlakyEmailSender {
-    def make[F[_]: Sync: Logger](timesToFail: Int :| Positive): F[FlakyEmailSender[F, RefBackedEmailSender[F]]] = for
-      underlying <- RefBackedEmailSender.make[F]
-      count <- Ref.of(0)
-    yield FlakyEmailSender(
-      underlying = underlying,
-      timesToFail = timesToFail,
-      count = count
-    )
-  }
