@@ -34,7 +34,7 @@ object CommsService:
       emailSender: EmailSender[F],
       pollingConfig: PollingConfig
   ): CommsService[F] =
-    new CommsService[F] {
+    new CommsService[F]:
 
       override def scheduleEmails(messages: NonEmptyList[EmailMessage]): F[List[EmailMessage.Id]] =
         emailMessageRepo.scheduleMessages(messages)
@@ -82,11 +82,8 @@ object CommsService:
           _ <- Logger[F].error(s"Error when sending message ${id}", error)
           wasMarked <- emailMessageRepo.markAsError(id, error.getMessage())
           _ <-
-            if (wasMarked) {
-              ().pure[F]
-            } else {
-              Logger[F].warn(s"Could not mark message $id as error, was it rescheduled in the meantime?")
-            }
+            if wasMarked then ().pure[F]
+            else Logger[F].warn(s"Could not mark message $id as error, was it rescheduled in the meantime?")
         yield ()
 
       override val pollForScheduledMessages: Stream[F, Unit] =
@@ -113,16 +110,13 @@ object CommsService:
         result <- msg.fold {
           Logger[F].warn(s"Could not reprocess claimed message with id $id as it was not found")
         } { case (message, status) =>
-          if (status === EmailStatus.Claimed) {
-            processClaimedMessage(id, message)
-          } else {
+          if status === EmailStatus.Claimed then processClaimedMessage(id, message)
+          else
             Logger[F].debug(
               s"Will not reprocess message with id $id as it's no longer claimed, current status is $status"
             )
-          }
         }
       yield result
-    }
 
 final case class PollingConfig(
     forScheduled: ScheduledMessagesPollingConfig,

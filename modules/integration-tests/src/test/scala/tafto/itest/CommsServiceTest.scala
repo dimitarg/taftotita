@@ -55,9 +55,8 @@ object CommsServiceTest:
           yield result
         },
         test("Errors when sending email are persisted") {
-          val emailSender: EmailSender[IO] = { (_: Id, _: EmailMessage) =>
-            IO.raiseError(new RuntimeException("Failed I have."))
-          }
+          val emailSender: EmailSender[IO] =
+            (_: Id, _: EmailMessage) => IO.raiseError(new RuntimeException("Failed I have."))
           for
             chanId <- channelGen.next
             emailMessageRepo = PgEmailMessageRepo(db, chanId)

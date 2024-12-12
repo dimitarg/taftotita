@@ -13,21 +13,19 @@ final case class PgUserRepo[F[_]: MonadCancelThrow](database: Database[F], passw
   import PgUserRepo.*
   override def initSuperAdmin(email: Email, fullName: Option[NonEmptyString], password: UserPassword): F[Boolean] =
     database.transact { session =>
-      for {
+      for
         alreadyExists <- session.unique(UserQueries.roleExists)(UserRole.SuperAdmin)
         willCreate = !alreadyExists
         _ <-
-          if (willCreate) {
-            for {
+          if willCreate then
+            for
               userId <- session.unique(UserQueries.insertUser)((fullName, email))
               _ <- session.execute(UserQueries.insertUserRole)((userId, UserRole.SuperAdmin))
               hashedPassword <- passwordHasher.hashPassword(PasswordHashAlgo.Bcrypt, password)
               _ <- session.execute(UserQueries.insertUserPassword)(userId, hashedPassword)
-            } yield ()
-          } else {
-            ().pure
-          }
-      } yield willCreate
+            yield ()
+          else ().pure
+      yield willCreate
     }
 
 object UserQueries:

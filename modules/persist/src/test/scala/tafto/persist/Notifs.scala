@@ -12,12 +12,12 @@ import skunk.data.Identifier
 
 object Notifs extends IOApp.Simple:
 
-  val dbResource: Resource[IO, Database[IO]] = for {
+  val dbResource: Resource[IO, Database[IO]] = for
     pg <- Postgres.make(dataBind = None, tailLog = true)
     config = pg.databaseConfig
     db <- Database.make[IO](config)
     _ <- Resource.eval(DatabaseMigrator.migrate[IO](config))
-  } yield db
+  yield db
 
   // this fucking thing needs to be lowercase.
   val chanId = Identifier.fromString("asd").toOption.get

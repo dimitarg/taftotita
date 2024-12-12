@@ -13,9 +13,9 @@ import tafto.service.comms.EmailMessageRepo
 import tafto.persist.testutil.ChannelIdGenerator
 import tafto.testutil.Generators.*
 
-object PgEmailMessageRepoTests {
+object PgEmailMessageRepoTests:
 
-  def tests(db: Database[IO], channelGen: ChannelIdGenerator[IO]): Stream[IO, Test] = {
+  def tests(db: Database[IO], channelGen: ChannelIdGenerator[IO]): Stream[IO, Test] =
     parSuite(
       List(
         test("PgEmailMessageRepo.scheduleMessages can insert a single message") {
@@ -115,14 +115,12 @@ object PgEmailMessageRepoTests {
         }
       )
     )
-  }
 
   def insertMessage(repo: EmailMessageRepo[IO])(message: EmailMessage): IO[EmailMessage.Id] = for
     ids <- repo.scheduleMessages(NonEmptyList.one(message))
-    id <- ids match {
+    id <- ids match
       case List(x) => x.pure[IO]
       case xs      => failure(s"expected single message, got $xs").failFast[IO] >> IO.never
-    }
   yield id
 
   def getMessage(repo: EmailMessageRepo[IO])(id: EmailMessage.Id): IO[(EmailMessage, EmailStatus)] = for
@@ -131,4 +129,3 @@ object PgEmailMessageRepoTests {
       case None                        => failure("Expected message but none returned.").failFast[IO] >> IO.never
       case Some(messageFromDb, status) => (messageFromDb, status).pure[IO]
   yield result
-}

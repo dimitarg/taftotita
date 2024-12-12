@@ -15,16 +15,15 @@ import tafto.service.PasswordHasher
 object InitSuperAdminTests:
 
   def tests(db: Database[IO]): Stream[IO, Test] =
-    val hasher = new PasswordHasher[IO] {
+    val hasher = new PasswordHasher[IO]:
       override def hashPassword(algo: PasswordHashAlgo, password: UserPassword): IO[HashedUserPassword] =
         IO.pure(HashedUserPassword(PasswordHashAlgo.Bcrypt, password.value))
-    }
     val repo = PgUserRepo(db, hasher)
 
     seqSuite(
       List(
         test("PgUserRepo.initSuperAdmin inits admin only once") {
-          for {
+          for
             wasInit <- repo.initSuperAdmin(
               email = Email("foo@example.com"),
               fullName = None,
@@ -35,7 +34,7 @@ object InitSuperAdminTests:
               fullName = None,
               password = Secret("shrubbery123123")
             )
-          } yield expect(wasInit === true && wasInitTwice === false)
+          yield expect(wasInit === true && wasInitTwice === false)
         }
       )
     )

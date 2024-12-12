@@ -17,12 +17,12 @@ object AllIntegrationTests extends Suite:
   given trace: Trace[IO] = Trace.Implicits.noop
   given logger: Logger[IO] = defaultLogger
 
-  val dbResource: Resource[IO, Database[IO]] = for {
+  val dbResource: Resource[IO, Database[IO]] = for
     pg <- Postgres.make(dataBind = None, tailLog = true)
     config = pg.databaseConfig
     db <- Database.make(config)
     _ <- Resource.eval(DatabaseMigrator.migrate(config))
-  } yield db
+  yield db
 
   val channelIdGen = Resource.eval(ChannelIdGenerator.make[IO])
 

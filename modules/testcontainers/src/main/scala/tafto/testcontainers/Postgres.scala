@@ -30,28 +30,24 @@ object Postgres:
           val container = PostgreSQLContainer(dockerImageNameOverride = imageName)
           container.configure { c =>
 
-            if (tailLog) {
+            if tailLog then
               val logger = consoleLogger[IO]()
               val _ = c.withLogConsumer { frame =>
                 val logMsg = frame.getUtf8StringWithoutLineEnding().trim()
-                if (logMsg.nonEmpty) {
-                  logger.info(logMsg).unsafeRunSync()
-                }
+                if logMsg.nonEmpty then logger.info(logMsg).unsafeRunSync()
               }
-            }
 
             dataBind.foreach { bind =>
               c.addFileSystemBind(bind.hostPath.toString, bind.containerPath.toString, BindMode.READ_WRITE)
               // the default strategy waits for the string "database system is ready to accept connections" to be logged TWICE.
               // this is only true when the PG system is initialising the first time, but not on subsequent attempts, when data already exists.
-              if (!bind.isNewlyCreated) {
+              if !bind.isNewlyCreated then
                 c.setWaitStrategy(
                   new LogMessageWaitStrategy()
                     .withRegEx(".*database system is ready to accept connections.*\\s")
                     .withTimes(1)
                     .withStartupTimeout(Duration.of(60, ChronoUnit.SECONDS))
                 )
-              }
             }
           }
           container.start()
@@ -59,13 +55,13 @@ object Postgres:
         }
       }
       .evalMap { container =>
-        val config = for {
+        val config = for
           host <- container.refineHost
           port <- container.refinePort(org.testcontainers.containers.PostgreSQLContainer.POSTGRESQL_PORT)
           dbName <- DatabaseName.either(PostgreSQLContainer.defaultDatabaseName)
           user <- UserName.either(PostgreSQLContainer.defaultUsername)
           pass = Password(Secret(PostgreSQLContainer.defaultPassword))
-        } yield DatabaseConfig(dbName, host, port, user, pass)
+        yield DatabaseConfig(dbName, host, port, user, pass)
 
         config.asIO.map { config =>
           Postgres(container, config)

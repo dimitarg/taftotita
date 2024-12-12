@@ -110,7 +110,7 @@ final case class PgEmailMessageRepo[F[_]: Time: MonadCancelThrow](
     notify(s, messages)
   }
 
-object EmailMessageQueries {
+object EmailMessageQueries:
 
   val domainEmailMessageCodec =
     (nonEmptyText.opt *: toList(_email) *: toList(_email) *: toList(_email) *: nonEmptyText.opt)
@@ -118,14 +118,12 @@ object EmailMessageQueries {
 
   val insertEmailEncoder = domainEmailMessageCodec *: emailStatus *: timestamptz
 
-  def insertMessages(size: Int) = {
-
+  def insertMessages(size: Int) =
     sql"""
       insert into email_messages(subject, to_, cc, bcc, body, status, created_at)
       values ${insertEmailEncoder.values.list(size)}
       returning id;
     """.query(emailMessageId)
-  }
 
   val getMessage =
     sql"""
@@ -180,8 +178,6 @@ object EmailMessageQueries {
   """.query(domainEmailMessageCodec).contramap[UpdateStatus] { updateStatus =>
     (updateStatus.id, updateStatus.currentStatus, updateStatus.newStatus, updateStatus.updatedAt)
   }
-
-}
 
 final case class UpdateStatus private (
     id: EmailMessage.Id,

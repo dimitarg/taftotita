@@ -14,12 +14,12 @@ object AllPersistIntegrationTests extends Suite:
 
   given trace: Trace[IO] = Trace.Implicits.noop
 
-  val dbResource: Resource[IO, Database[IO]] = for {
+  val dbResource: Resource[IO, Database[IO]] = for
     pg <- Postgres.make(dataBind = None, tailLog = true)
     config = pg.databaseConfig
     db <- Database.make(config)
     _ <- Resource.eval(DatabaseMigrator.migrate(config))
-  } yield db
+  yield db
 
   val channelGenResource: Resource[IO, ChannelIdGenerator[IO]] =
     Resource.eval(ChannelIdGenerator.make[IO])

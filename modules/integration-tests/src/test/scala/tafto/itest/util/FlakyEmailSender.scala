@@ -15,11 +15,8 @@ final case class FlakyEmailSender[F[_]: MonadThrow, Underlying <: EmailSender[F]
 ) extends EmailSender[F]:
   override def sendEmail(id: EmailMessage.Id, email: EmailMessage): F[Unit] =
     count.updateAndGet(_ + 1).flatMap { cnt =>
-      if (cnt > timesToFail) {
-        underlying.sendEmail(id, email)
-      } else {
-        MonadThrow[F].raiseError(new RuntimeException("Flaky email sender."))
-      }
+      if cnt > timesToFail then underlying.sendEmail(id, email)
+      else MonadThrow[F].raiseError(new RuntimeException("Flaky email sender."))
     }
 
 object FlakyEmailSender:

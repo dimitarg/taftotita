@@ -21,17 +21,13 @@ package object util:
   object Port extends RefinedTypeOps[Int, ValidPortRange, Port]
 
   def safeAssert[F[_]: MonadThrow](cond: Boolean, error: => String): F[Unit] =
-    if (cond) ().pure else MonadThrow[F].raiseError(new RuntimeException(error))
+    if cond then ().pure else MonadThrow[F].raiseError(new RuntimeException(error))
 
   extension [A](either: Either[String, A])
     def errorAsThrowable: Either[Throwable, A] = either.leftMap(x => new RuntimeException(x)).leftWiden[Throwable]
     def orThrow[F[_]: MonadThrow]: F[A] = MonadThrow[F].fromEither(errorAsThrowable)
     def asIO: IO[A] = orThrow[IO]
 
-  def safeMatch[A, B](x: A)(f: PartialFunction[A, B])(error: A => String): Either[String, B] = {
-    if (f.isDefinedAt(x)) {
-      f(x).asRight
-    } else {
-      error(x).asLeft
-    }
-  }
+  def safeMatch[A, B](x: A)(f: PartialFunction[A, B])(error: A => String): Either[String, B] =
+    if f.isDefinedAt(x) then f(x).asRight
+    else error(x).asLeft

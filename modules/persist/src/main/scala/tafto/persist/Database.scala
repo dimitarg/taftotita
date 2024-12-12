@@ -14,10 +14,10 @@ import cats.Applicative
 final case class Database[F[_]: MonadCancelThrow](pool: Resource[F, Session[F]]):
 
   def transact[A](body: Session[F] => F[A]): F[A] =
-    val transactionalSession = for {
+    val transactionalSession = for
       session <- pool
       transaction <- session.transaction
-    } yield (session, transaction)
+    yield (session, transaction)
     transactionalSession.use { case (session, _) =>
       body(session)
     }
@@ -49,11 +49,10 @@ object Database:
 
   def batched[F[_]: Applicative, A, B](
       s: Session[F]
-  )(query: Int => Query[List[A], B])(in: NonEmptyList[A]): F[List[B]] = {
+  )(query: Int => Query[List[A], B])(in: NonEmptyList[A]): F[List[B]] =
     val inputBatches = in.toList.grouped(batchSize).toList
     inputBatches
       .traverse { xs =>
         s.execute(query(xs.size))(xs)
       }
       .map(_.flatten)
-  }
