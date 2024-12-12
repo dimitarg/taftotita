@@ -2,6 +2,7 @@ package tafto.persist
 
 import cats.implicits.*
 import tafto.domain.*
+
 import java.time.OffsetDateTime
 
 final case class PgEmailMessage(

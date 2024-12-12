@@ -1,11 +1,11 @@
 package tafto.persist
 
-import cats.implicits.*
 import cats.effect.*
-import skunk.implicits.*
+import cats.implicits.*
 import skunk.codec.all as skunkCodecs
-import tafto.service.HealthService
+import skunk.implicits.*
 import tafto.persist.HealthQueries.select1
+import tafto.service.HealthService
 
 final case class PgHealthService[F[_]: MonadCancelThrow](
     database: Database[F]

@@ -1,13 +1,13 @@
 package tafto.localdev
 
 import cats.effect.*
-import tafto.testcontainers.*
-import tafto.persist.*
-import tafto.crypto.*
-import natchez.Trace.Implicits.noop
-import tafto.rest.server.RestServer
-import tafto.db.DatabaseMigrator
 import io.odin.*
+import natchez.Trace.Implicits.noop
+import tafto.crypto.*
+import tafto.db.DatabaseMigrator
+import tafto.persist.*
+import tafto.rest.server.RestServer
+import tafto.testcontainers.*
 
 object Boot extends IOApp.Simple:
   val mkApp = for

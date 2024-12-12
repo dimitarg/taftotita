@@ -1,9 +1,10 @@
 package tafto.itest
 
-import scala.concurrent.duration.*
-import cats.implicits.*
 import cats.effect.*
+import cats.implicits.*
 import fs2.Stream
+
+import scala.concurrent.duration.*
 
 package object util:
   def repeatWhile[F[_]: Temporal, A](prg: F[A])(pred: (Option[A], A) => Boolean)(interval: FiniteDuration): F[A] =

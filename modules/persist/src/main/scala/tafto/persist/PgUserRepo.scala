@@ -1,12 +1,13 @@
 package tafto.persist
 
-import tafto.service.{UserRepo, PasswordHasher}
-import tafto.domain.*
-import tafto.util.NonEmptyString
-import skunk.implicits.*
-import skunk.codec.all as skunkCodecs
-import cats.implicits.*
 import cats.effect.MonadCancelThrow
+import cats.implicits.*
+import skunk.codec.all as skunkCodecs
+import skunk.implicits.*
+import tafto.domain.*
+import tafto.service.PasswordHasher
+import tafto.service.UserRepo
+import tafto.util.NonEmptyString
 
 final case class PgUserRepo[F[_]: MonadCancelThrow](database: Database[F], passwordHasher: PasswordHasher[F])
     extends UserRepo[F]:

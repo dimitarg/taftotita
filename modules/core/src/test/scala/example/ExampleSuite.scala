@@ -1,7 +1,7 @@
 package example
 
-import cats.implicits.*
 import cats.effect.*
+import cats.implicits.*
 import fs2.Stream
 import weaver.pure.*
 

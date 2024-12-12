@@ -1,18 +1,18 @@
 package tafto.testcontainers
 
-import java.time.Duration
-import java.time.temporal.ChronoUnit
-
+import cats.effect.*
+import cats.effect.unsafe.implicits.global
+import cats.implicits.*
+import ciris.Secret
 import com.dimafeng.testcontainers.PostgreSQLContainer
+import io.odin.*
 import org.testcontainers.containers.BindMode
 import org.testcontainers.containers.wait.strategy.LogMessageWaitStrategy
-import cats.implicits.*
-import cats.effect.*
-import tafto.config.*
-import ciris.Secret
-import io.odin.*
-import cats.effect.unsafe.implicits.global
 import org.testcontainers.utility.DockerImageName
+import tafto.config.*
+
+import java.time.Duration
+import java.time.temporal.ChronoUnit
 
 final case class Postgres(
     private val underlying: PostgreSQLContainer,

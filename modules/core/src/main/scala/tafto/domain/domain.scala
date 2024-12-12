@@ -1,10 +1,9 @@
 package tafto.domain
 
-import tafto.util.*
+import ciris.Secret
 import io.github.iltotore.iron.*
 import io.github.iltotore.iron.constraint.all.*
-import ciris.Secret
-import tafto.util.NonEmpty
+import tafto.util.*
 
 opaque type Email = NonEmptyString
 object Email extends RefinedTypeOps[String, NonEmpty, Email]

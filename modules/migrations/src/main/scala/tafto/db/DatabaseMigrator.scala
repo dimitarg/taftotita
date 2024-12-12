@@ -1,12 +1,11 @@
 package tafto.db
 
-import org.flywaydb.core.Flyway
-
 import cats.effect.*
+import ciris.Secret
 import io.github.iltotore.iron.*
+import org.flywaydb.core.Flyway
 import tafto.config.*
 import tafto.util.*
-import ciris.Secret
 
 object DatabaseMigrator extends IOApp.Simple:
 

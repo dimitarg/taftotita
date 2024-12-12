@@ -1,8 +1,8 @@
 package tafto.persist
 
+import _root_.skunk.data.Identifier
 import io.github.iltotore.iron.*
 import io.github.iltotore.iron.constraint.string.*
-import _root_.skunk.data.Identifier
 
 type ValidChannelId = (Trimmed & LettersLowerCase)
 object ChannelId:

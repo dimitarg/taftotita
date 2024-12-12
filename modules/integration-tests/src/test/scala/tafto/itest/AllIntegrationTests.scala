@@ -3,14 +3,14 @@ package tafto.itest
 import cats.effect.*
 import cats.implicits.*
 import fs2.Stream
-import weaver.pure.*
-import tafto.persist.Database
-import tafto.testcontainers.Postgres
+import io.odin.Logger
 import natchez.Trace
 import tafto.db.DatabaseMigrator
 import tafto.log.defaultLogger
+import tafto.persist.Database
 import tafto.persist.testutil.ChannelIdGenerator
-import io.odin.Logger
+import tafto.testcontainers.Postgres
+import weaver.pure.*
 
 object AllIntegrationTests extends Suite:
 

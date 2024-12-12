@@ -1,10 +1,10 @@
 package tafto.rest.server
 
-import cats.implicits.*
 import cats.effect.*
+import cats.implicits.*
+import fs2.io.net.Network
 import org.http4s.ember.server.EmberServerBuilder
 import sttp.tapir.server.http4s.Http4sServerInterpreter
-import fs2.io.net.Network
 import tafto.service.*
 
 object RestServer:

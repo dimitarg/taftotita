@@ -1,8 +1,8 @@
 package tafto.domain
 
 import cats.Eq
-import tafto.util.*
 import io.github.iltotore.iron.*
+import tafto.util.*
 
 final case class EmailMessage(
     subject: Option[NonEmptyString],

@@ -1,9 +1,9 @@
 package tafto.crypto
 
-import cats.implicits.*
 import cats.effect.*
-import tafto.service.PasswordHasher
+import cats.implicits.*
 import tafto.domain.*
+import tafto.service.PasswordHasher
 import tsec.passwordhashers.jca.BCrypt
 
 final class PasswordHasherImpl[F[_]: Sync] extends PasswordHasher[F]:

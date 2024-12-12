@@ -1,30 +1,28 @@
 package tafto.itest
 
+import cats.data.NonEmptyList
+import cats.effect.*
+import cats.implicits.*
+import fs2.{io as _, *}
+import io.github.iltotore.iron.cats.given
+import io.github.iltotore.iron.constraint.numeric.*
+import io.github.iltotore.iron.{cats as _, *}
+import io.odin.Logger
+import monocle.syntax.all.*
+import tafto.domain.*
+import tafto.itest.util.*
+import tafto.persist.*
+import tafto.persist.testutil.ChannelIdGenerator
+import tafto.service.comms.CommsService
+import tafto.service.comms.EmailSender
+import tafto.service.comms.PollingConfig
+import tafto.service.util.Retry
+import tafto.testutil.Generators.*
+import tafto.util.*
+import weaver.pure.*
+
 import java.time.*
 import scala.concurrent.duration.*
-
-import cats.implicits.*
-import cats.effect.*
-import tafto.persist.*
-import fs2.*
-import weaver.pure.*
-import tafto.service.comms.{CommsService, PollingConfig}
-import tafto.domain.*
-import tafto.util.*
-import tafto.itest.util.*
-
-import _root_.io.odin.Logger
-import tafto.domain.EmailMessage
-import _root_.cats.data.NonEmptyList
-import tafto.service.comms.EmailSender
-import tafto.domain.EmailMessage.Id
-import _root_.io.github.iltotore.iron.cats.given
-import _root_.io.github.iltotore.iron.*
-import _root_.io.github.iltotore.iron.constraint.numeric.*
-import tafto.service.util.Retry
-import monocle.syntax.all.*
-import tafto.testutil.Generators.*
-import tafto.persist.testutil.ChannelIdGenerator
 
 object CommsServiceTest:
 
@@ -56,7 +54,7 @@ object CommsServiceTest:
         },
         test("Errors when sending email are persisted") {
           val emailSender: EmailSender[IO] =
-            (_: Id, _: EmailMessage) => IO.raiseError(new RuntimeException("Failed I have."))
+            (_: EmailMessage.Id, _: EmailMessage) => IO.raiseError(new RuntimeException("Failed I have."))
           for
             chanId <- channelGen.next
             emailMessageRepo = PgEmailMessageRepo(db, chanId)

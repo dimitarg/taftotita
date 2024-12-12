@@ -1,9 +1,9 @@
 package tafto
 
-import cats.implicits.*
-import tafto.util.*
-import com.dimafeng.testcontainers.*
 import cats.effect.IO
+import cats.implicits.*
+import com.dimafeng.testcontainers.*
+import tafto.util.*
 
 package object testcontainers:
 

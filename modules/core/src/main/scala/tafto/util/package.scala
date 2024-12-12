@@ -1,11 +1,10 @@
 package tafto
 
-import cats.implicits.*
+import _root_.cats.effect.IO
 import cats.MonadThrow
-
+import cats.implicits.*
 import io.github.iltotore.iron.*
 import io.github.iltotore.iron.constraint.all.*
-import _root_.cats.effect.IO
 
 package object util:
   type NonEmpty = MinLength[1]

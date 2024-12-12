@@ -1,14 +1,13 @@
 package tafto.testutil
 
+import _root_.cats.data.NonEmptyList
 import cats.effect.*
-import org.scalacheck.Gen
-import tafto.domain.Email
 import io.github.iltotore.iron.*
 import io.github.iltotore.iron.constraint.numeric.Positive
-
-import tafto.util.NonEmpty
+import org.scalacheck.Gen
+import tafto.domain.Email
 import tafto.domain.EmailMessage
-import _root_.cats.data.NonEmptyList
+import tafto.util.NonEmpty
 
 object Generators:
 

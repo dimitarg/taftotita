@@ -1,15 +1,16 @@
 package tafto.persist
-import cats.implicits.*
-import fs2.Stream
-import skunk.*
-import skunk.data.{Identifier, Notification}
+import cats.Applicative
+import cats.data.NonEmptyList
 import cats.effect.*
 import cats.effect.std.Console
-import tafto.config.DatabaseConfig
+import cats.implicits.*
+import fs2.Stream
 import fs2.io.net.Network
 import natchez.Trace
-import cats.data.NonEmptyList
-import cats.Applicative
+import skunk.*
+import skunk.data.Identifier
+import skunk.data.Notification
+import tafto.config.DatabaseConfig
 
 final case class Database[F[_]: MonadCancelThrow](pool: Resource[F, Session[F]]):
 

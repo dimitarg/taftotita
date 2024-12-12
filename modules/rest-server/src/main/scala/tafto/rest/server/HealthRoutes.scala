@@ -1,9 +1,9 @@
 package tafto.rest.server
 
+import cats.effect.*
+import cats.implicits.*
 import tafto.rest.api.HealthEndpoints.*
 import tafto.rest.api.resources.HealthResponse
-import cats.implicits.*
-import cats.effect.*
 import tafto.service.HealthService
 
 final case class HealthRoutes[F[_]: Concurrent](

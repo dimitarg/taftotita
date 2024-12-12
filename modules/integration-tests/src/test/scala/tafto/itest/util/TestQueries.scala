@@ -1,8 +1,9 @@
 package tafto.itest.util
 
-import skunk.implicits.*
 import skunk.codec.all.*
-import tafto.persist.codecs.{emailMessageId, emailStatus}
+import skunk.implicits.*
+import tafto.persist.codecs.emailMessageId
+import tafto.persist.codecs.emailStatus
 
 object TestQueries:
   val updateMessageTimestamps = sql"""

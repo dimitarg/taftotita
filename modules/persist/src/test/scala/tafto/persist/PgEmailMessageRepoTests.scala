@@ -1,17 +1,17 @@
 package tafto.persist
 
-import cats.implicits.*
-import cats.effect.*
 import cats.data.NonEmptyList
-import weaver.pure.*
+import cats.effect.*
+import cats.implicits.*
 import fs2.Stream
-import tafto.domain.*
-import tafto.util.*
 import io.github.iltotore.iron.autoRefine
 import io.github.iltotore.iron.cats.given
-import tafto.service.comms.EmailMessageRepo
+import tafto.domain.*
 import tafto.persist.testutil.ChannelIdGenerator
+import tafto.service.comms.EmailMessageRepo
 import tafto.testutil.Generators.*
+import tafto.util.*
+import weaver.pure.*
 
 object PgEmailMessageRepoTests:
 

@@ -1,12 +1,12 @@
 package tafto.rest.api
 
-import weaver.pure.*
-import fs2.Stream
-import cats.implicits.*
 import cats.effect.*
 import cats.effect.std.Console
+import cats.implicits.*
+import fs2.Stream
 import sttp.apispec.openapi.circe.*
 import sttp.apispec.openapi.circe.yaml.*
+import weaver.pure.*
 
 object ApiDocsTests extends Suite:
   override def suitesStream: Stream[IO, Test] = parSuite(

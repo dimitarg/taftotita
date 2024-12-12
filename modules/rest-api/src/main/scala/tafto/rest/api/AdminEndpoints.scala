@@ -1,10 +1,11 @@
 package tafto.rest.api
-import tafto.rest.api.resources.*
-import BaseEndpoint.*
+import sttp.model.StatusCode
 import sttp.tapir.*
 import sttp.tapir.json.circe.*
+import tafto.rest.api.resources.*
+
+import BaseEndpoint.*
 import InitSuperAdminRequest.given
-import sttp.model.StatusCode
 
 object AdminEndpoints:
 

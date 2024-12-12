@@ -1,6 +1,7 @@
 package tafto.log
 
-import cats.effect.{Sync, IO}
+import cats.effect.IO
+import cats.effect.Sync
 import cats.effect.std.Dispatcher
 import cats.effect.unsafe.implicits.global
 import io.odin.*

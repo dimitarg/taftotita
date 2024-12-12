@@ -1,8 +1,9 @@
 package tafto.service.comms
 
-import fs2.Stream
 import cats.data.NonEmptyList
+import fs2.Stream
 import tafto.domain.*
+
 import java.time.OffsetDateTime
 
 trait EmailMessageRepo[F[_]]:

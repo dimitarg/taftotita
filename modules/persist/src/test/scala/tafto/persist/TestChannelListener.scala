@@ -1,7 +1,7 @@
 package tafto.persist
 
-import fs2.Stream
 import cats.effect.*
+import fs2.Stream
 import skunk.data.Identifier
 import skunk.data.Notification
 

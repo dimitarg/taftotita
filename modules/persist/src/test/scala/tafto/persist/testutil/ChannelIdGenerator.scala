@@ -1,11 +1,11 @@
 package tafto.persist.testutil
 
-import cats.implicits.*
-import cats.effect.*
 import cats.MonadThrow
-import tafto.persist.ChannelId
+import cats.effect.*
+import cats.implicits.*
+import io.github.iltotore.iron.{skunk as _, *}
 import skunk.data.Identifier
-import io.github.iltotore.iron.*
+import tafto.persist.ChannelId
 import tafto.persist.ValidChannelId
 import tafto.util.*
 

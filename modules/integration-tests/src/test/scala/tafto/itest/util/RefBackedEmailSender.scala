@@ -1,11 +1,11 @@
 package tafto.itest.util
 
-import scala.concurrent.duration.FiniteDuration
-
-import cats.implicits.*
 import cats.effect.*
+import cats.implicits.*
 import tafto.domain.EmailMessage
 import tafto.service.comms.EmailSender
+
+import scala.concurrent.duration.FiniteDuration
 
 final case class RefBackedEmailSender[F[_]: Sync](ref: Ref[F, List[(EmailMessage.Id, EmailMessage)]])
     extends EmailSender[F]:

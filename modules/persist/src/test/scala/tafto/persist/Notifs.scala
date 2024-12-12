@@ -1,14 +1,14 @@
 package tafto.persist
 
+import cats.effect.*
+import cats.implicits.*
+import fs2.Stream
+import natchez.Trace.Implicits.noop
+import skunk.data.Identifier
+import tafto.db.DatabaseMigrator
 import tafto.testcontainers.Postgres
 
 import scala.concurrent.duration.*
-import fs2.Stream
-import cats.implicits.*
-import cats.effect.*
-import natchez.Trace.Implicits.noop
-import tafto.db.DatabaseMigrator
-import skunk.data.Identifier
 
 object Notifs extends IOApp.Simple:
 

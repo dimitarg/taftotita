@@ -1,13 +1,13 @@
 package tafto.service.util
 
-import scala.concurrent.duration.*
-
-import retry.*
 import cats.Applicative
 import cats.effect.Temporal
 import io.github.iltotore.iron.*
 import io.github.iltotore.iron.constraint.numeric.*
 import io.odin.Logger
+import retry.*
+
+import scala.concurrent.duration.*
 
 object Retry:
   def fullJitter[F[_]: Applicative](

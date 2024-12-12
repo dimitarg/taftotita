@@ -1,10 +1,10 @@
 package tafto.service.comms
 
 import cats.effect.Temporal
-import tafto.domain.EmailMessage
-import retry.RetryPolicy
-import tafto.service.util.Retry
 import io.odin.Logger
+import retry.RetryPolicy
+import tafto.domain.EmailMessage
+import tafto.service.util.Retry
 
 trait EmailSender[F[_]]:
   def sendEmail(id: EmailMessage.Id, email: EmailMessage): F[Unit]

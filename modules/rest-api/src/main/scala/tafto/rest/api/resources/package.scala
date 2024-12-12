@@ -1,9 +1,9 @@
 package tafto.rest.api
 
-import ciris.Secret
 import cats.Show
-import sttp.tapir.Schema
+import ciris.Secret
 import io.circe.*
+import sttp.tapir.Schema
 
 package object resources:
 

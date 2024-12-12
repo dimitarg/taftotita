@@ -1,7 +1,7 @@
 package tafto.service
 
-import cats.implicits.*
 import cats.Parallel
+import cats.implicits.*
 
 trait HealthService[F[_]]:
   def getHealth: F[Unit]

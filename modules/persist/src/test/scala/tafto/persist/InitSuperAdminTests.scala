@@ -1,16 +1,15 @@
 package tafto.persist
 
-import cats.implicits.*
 import cats.effect.*
-import io.github.iltotore.iron.*
-import io.github.iltotore.iron.cats.given
-import fs2.*
-import weaver.pure.*
-
-import tafto.domain.*
-import tafto.util.NonEmptyString
+import cats.implicits.*
 import ciris.Secret
+import fs2.{io as _, *}
+import io.github.iltotore.iron.cats.given
+import io.github.iltotore.iron.{cats as _, *}
+import tafto.domain.*
 import tafto.service.PasswordHasher
+import tafto.util.NonEmptyString
+import weaver.pure.*
 
 object InitSuperAdminTests:
 

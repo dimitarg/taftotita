@@ -1,15 +1,14 @@
 package tafto.service.comms
 
-import scala.concurrent.duration.*
-
-import tafto.domain.*
-import cats.effect.*
-import fs2.Stream
 import cats.data.NonEmptyList
+import cats.effect.*
 import cats.implicits.*
-import cats.effect.implicits.*
+import fs2.Stream
 import io.odin.Logger
+import tafto.domain.*
 import tafto.util.Time
+
+import scala.concurrent.duration.*
 
 trait CommsService[F[_]]:
 

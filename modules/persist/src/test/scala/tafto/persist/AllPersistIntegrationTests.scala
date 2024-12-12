@@ -1,14 +1,13 @@
 package tafto.persist
 
-import tafto.testcontainers.Postgres
-
+import cats.effect.*
 import cats.implicits.*
 import fs2.Stream
-import cats.effect.*
 import natchez.Trace
 import tafto.db.DatabaseMigrator
-import weaver.pure.*
 import tafto.persist.testutil.ChannelIdGenerator
+import tafto.testcontainers.Postgres
+import weaver.pure.*
 
 object AllPersistIntegrationTests extends Suite:
 

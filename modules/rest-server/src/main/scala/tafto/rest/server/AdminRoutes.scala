@@ -1,9 +1,9 @@
 package tafto.rest.server
 
+import cats.effect.*
+import cats.implicits.*
 import tafto.rest.api.AdminEndpoints.*
 import tafto.rest.api.resources.ClientError
-import cats.implicits.*
-import cats.effect.*
 import tafto.service.UserRepo
 
 final case class AdminRoutes[F[_]: Concurrent](

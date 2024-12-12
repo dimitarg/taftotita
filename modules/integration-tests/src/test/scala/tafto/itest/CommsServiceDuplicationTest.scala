@@ -1,21 +1,22 @@
 package tafto.itest
 
-import cats.implicits.*
-import scala.concurrent.duration.*
 import cats.effect.*
-import io.github.iltotore.iron.*
+import cats.implicits.*
+import fs2.{io as _, *}
 import io.github.iltotore.iron.constraint.numeric.Positive
-import tafto.persist.*
-import fs2.*
-import weaver.pure.*
-import tafto.service.comms.{CommsService, PollingConfig}
-import tafto.util.*
+import io.github.iltotore.iron.{cats as _, *}
+import io.odin.Logger
 import tafto.domain.*
 import tafto.itest.util.*
-import tafto.testutil.Generators.*
-
-import _root_.io.odin.Logger
+import tafto.persist.*
 import tafto.persist.testutil.ChannelIdGenerator
+import tafto.service.comms.CommsService
+import tafto.service.comms.PollingConfig
+import tafto.testutil.Generators.*
+import tafto.util.*
+import weaver.pure.*
+
+import scala.concurrent.duration.*
 
 object CommsServiceDuplicationTest:
 

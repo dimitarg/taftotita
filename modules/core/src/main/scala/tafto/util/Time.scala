@@ -1,10 +1,11 @@
 package tafto.util
 
-import java.time.{OffsetDateTime, Instant}
-
-import cats.implicits.*
 import cats.Functor
 import cats.effect.Clock
+import cats.implicits.*
+
+import java.time.Instant
+import java.time.OffsetDateTime
 import java.time.ZoneOffset
 
 trait Time[F[_]]:

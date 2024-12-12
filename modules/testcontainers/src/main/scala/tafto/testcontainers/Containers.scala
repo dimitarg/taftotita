@@ -1,9 +1,9 @@
 package tafto.testcontainers
 
-import tafto.util.safeAssert
-import cats.implicits.*
 import cats.effect.*
+import cats.implicits.*
 import fs2.io.file.*
+import tafto.util.safeAssert
 
 final case class Containers(
     postgres: Postgres

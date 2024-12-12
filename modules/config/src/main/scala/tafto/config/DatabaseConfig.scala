@@ -1,8 +1,8 @@
 package tafto.config
 
-import tafto.util.*
 import io.github.iltotore.iron.*
 import io.github.iltotore.iron.constraint.all.*
+import tafto.util.*
 
 opaque type DatabaseName = NonEmptyString
 object DatabaseName extends RefinedTypeOps[String, MinLength[1], DatabaseName]

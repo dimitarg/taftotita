@@ -1,22 +1,23 @@
 package tafto.persist
 
-import tafto.domain.*
-import fs2.Stream
-import cats.implicits.*
-import skunk.implicits.*
-import skunk.codec.all.*
-import tafto.persist.codecs.*
-import tafto.util.*
-import java.time.OffsetDateTime
 import cats.data.NonEmptyList
-import skunk.data.Identifier
 import cats.effect.kernel.MonadCancelThrow
+import cats.implicits.*
+import fs2.Stream
 import io.github.iltotore.iron.autoRefine
 import io.github.iltotore.iron.cats.given
-import tafto.service.comms.EmailMessageRepo
-import skunk.data.Completion
 import skunk.Session
+import skunk.codec.all.*
+import skunk.data.Completion
+import skunk.data.Identifier
+import skunk.implicits.*
+import tafto.domain.*
 import tafto.domain.EmailMessage.Id
+import tafto.persist.codecs.*
+import tafto.service.comms.EmailMessageRepo
+import tafto.util.*
+
+import java.time.OffsetDateTime
 
 final case class PgEmailMessageRepo[F[_]: Time: MonadCancelThrow](
     database: Database[F],

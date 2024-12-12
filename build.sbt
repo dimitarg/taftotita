@@ -23,6 +23,10 @@ def module(name: String): Project = Project(id = s"tafto-${name}",  base = file(
     ),
     Test / fork := true,
     run / fork := true,
+
+    // these are used by Scalafix
+    semanticdbEnabled := true,
+    semanticdbVersion := scalafixSemanticdb.revision,
   )
 
 lazy val logging = module("logging")

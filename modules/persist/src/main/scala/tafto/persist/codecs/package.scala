@@ -1,14 +1,14 @@
 package tafto.persist
 
+import _root_.skunk.Codec
+import _root_.skunk.codec.all.*
+import _root_.skunk.data.Arr
+import _root_.skunk.data.Type
 import cats.implicits.*
-import skunk.Codec
-import tafto.domain.*
-import tafto.util.*
-import skunk.codec.all.*
 import io.github.iltotore.iron.*
 import io.github.iltotore.iron.skunk.*
-import _root_.skunk.data.Type
-import _root_.skunk.data.Arr
+import tafto.domain.*
+import tafto.util.*
 
 package object codecs:
   def toList[A](underlying: Codec[Arr[A]]): Codec[List[A]] = underlying.imap(_.toList)(Arr.fromFoldable(_))
