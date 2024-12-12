@@ -11,6 +11,7 @@ import io.github.iltotore.iron.autoRefine
 import io.github.iltotore.iron.cats.given
 import tafto.service.comms.EmailMessageRepo
 import tafto.persist.testutil.ChannelIdGenerator
+import tafto.testutil.Generators.*
 
 object PgEmailMessageRepoTests {
 
@@ -18,14 +19,8 @@ object PgEmailMessageRepoTests {
     parSuite(
       List(
         test("PgEmailMessageRepo.scheduleMessages can insert a single message") {
-          val msg = EmailMessage(
-            subject = Some("Insert Single"),
-            to = List(Email("foo@bar.baz")),
-            cc = List(Email("cc@example.com")),
-            bcc = List(Email("bcc1@example.com"), Email("bcc2@example.com")),
-            body = Some("Hello there")
-          )
           for
+            msg <- emailMessageGen.sampleIO
             channelId <- channelGen.next
             messageRepo = PgEmailMessageRepo(db, channelId)
             id <- insertMessage(messageRepo)(msg)
@@ -33,36 +28,21 @@ object PgEmailMessageRepoTests {
           yield expect(messageFromDb === (msg, EmailStatus.Scheduled).some)
         },
         test("PgEmailMessageRepo.scheduleMessages can insert a large batch of messages") {
-          val testMessage = EmailMessage(
-            subject = Some("Insert Multi"),
-            to = List(Email("foo@bar.baz")),
-            cc = List(Email("cc@example.com")),
-            bcc = List(Email("bcc1@example.com"), Email("bcc2@example.com")),
-            body = Some("Hello there")
-          )
-
-          val messages = NonEmptyList(testMessage, List.fill(10000)(testMessage))
           for
+            messages <- nelOfSize(10000)(emailMessageGen).sampleIO
             channelId <- channelGen.next
             messageRepo = PgEmailMessageRepo(db, channelId)
             ids <- messageRepo.scheduleMessages(messages)
           yield expect(ids.size === messages.size)
         },
         test("PgEmailMessageRepo.scheduleMessages notifies on inserting messages") {
-          val testMessage = EmailMessage(
-            subject = Some("Insert Notifications"),
-            to = List(Email("foo@bar.baz")),
-            cc = List(Email("cc@example.com")),
-            bcc = List(Email("bcc1@example.com"), Email("bcc2@example.com")),
-            body = Some("Hello there")
-          )
 
-          val testSize = 5
-          val messages = NonEmptyList(testMessage, List.fill(testSize - 1)(testMessage))
+          inline val testSize = 5
 
           for
             channelId <- channelGen.next
             messageRepo = PgEmailMessageRepo(db, channelId)
+            messages <- nelOfSize(testSize)(emailMessageGen).sampleIO
             result <- TestChannelListener.make(db, channelId).use { messageStream =>
               for
                 ids <- messageRepo.scheduleMessages(messages)
@@ -78,17 +58,10 @@ object PgEmailMessageRepoTests {
           yield result
         },
         test("PgEmailMessageRepo.claim can claim a message") {
-          val testMessage = EmailMessage(
-            subject = Some("Claim"),
-            to = List(Email("a@bar.baz")),
-            cc = List(Email("b@example.com")),
-            bcc = List(Email("c@example.com"), Email("d@example.com")),
-            body = Some("Yoyo.")
-          )
-
           for
             channelId <- channelGen.next
             messageRepo = PgEmailMessageRepo(db, channelId)
+            testMessage <- emailMessageGen.sampleIO
             id <- insertMessage(messageRepo)(testMessage)
             claimed <- messageRepo.claim(id)
             (messageFromDb, status) <- getMessage(messageRepo)(id)
@@ -97,17 +70,10 @@ object PgEmailMessageRepoTests {
             expect(status === EmailStatus.Claimed)
         },
         test("PgEmailMessageRepo.claim cannot claim a message once it's claimed") {
-          val testMessage = EmailMessage(
-            subject = Some("Claim twice"),
-            to = List(Email("a@bar.baz")),
-            cc = List(Email("b@example.com")),
-            bcc = List(Email("c@example.com"), Email("d@example.com")),
-            body = Some("Yoyoyo.")
-          )
-
           for
             channelId <- channelGen.next
             messageRepo = PgEmailMessageRepo(db, channelId)
+            testMessage <- emailMessageGen.sampleIO
             id <- insertMessage(messageRepo)(testMessage)
             _ <- messageRepo.claim(id)
             claimedTwice <- messageRepo.claim(id)
@@ -117,17 +83,10 @@ object PgEmailMessageRepoTests {
             expect(status === EmailStatus.Claimed)
         },
         test("PgEmailMessageRepo.markAsSent can mark a message that was claimed") {
-          val testMessage = EmailMessage(
-            subject = Some("Mark as sent"),
-            to = List(Email("a@bar.baz")),
-            cc = List(Email("b@example.com")),
-            bcc = List(Email("c@example.com"), Email("d@example.com")),
-            body = Some("Yoyo.")
-          )
-
           for
             channelId <- channelGen.next
             messageRepo = PgEmailMessageRepo(db, channelId)
+            testMessage <- emailMessageGen.sampleIO
             id <- insertMessage(messageRepo)(testMessage)
             _ <- messageRepo.claim(id)
             marked <- messageRepo.markAsSent(id)
@@ -135,35 +94,20 @@ object PgEmailMessageRepoTests {
           yield expect(marked === true) `and` expect(status === EmailStatus.Sent)
         },
         test("PgEmailMessageRepo.markAsSent cannot mark a message that is only scheduled") {
-          val testMessage = EmailMessage(
-            subject = Some("Mark scheduled as sent"),
-            to = List(Email("a@bar.baz")),
-            cc = List(Email("b@example.com")),
-            bcc = List(Email("c@example.com"), Email("d@example.com")),
-            body = Some("Yoyo.")
-          )
-
           for
             channelId <- channelGen.next
             messageRepo = PgEmailMessageRepo(db, channelId)
+            testMessage <- emailMessageGen.sampleIO
             id <- insertMessage(messageRepo)(testMessage)
             marked <- messageRepo.markAsSent(id)
             (_, status) <- getMessage(messageRepo)(id)
           yield expect(marked === false) `and` expect(status === EmailStatus.Scheduled)
         },
         test("PgEmailMessageRepo.getScheduledIds works correctly") {
-          val msg = EmailMessage(
-            subject = Some("Scheduled ids"),
-            to = List(Email("a@bar.baz")),
-            cc = List(Email("b@example.com")),
-            bcc = List(Email("c@example.com"), Email("d@example.com")),
-            body = Some("Yoyo.")
-          )
-          val msgs = NonEmptyList(msg, List.fill(9)(msg))
-
           for
             channelId <- channelGen.next
             messageRepo = PgEmailMessageRepo(db, channelId)
+            msgs <- nelOfSize(10)(emailMessageGen).sampleIO
             insertedIds <- messageRepo.scheduleMessages(msgs)
             now <- Time[IO].utc
             scheduledIds <- messageRepo.getScheduledIds(now)

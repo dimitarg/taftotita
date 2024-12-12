@@ -11,7 +11,8 @@ val monocleVersion = "3.1.0"
 def module(name: String): Project = Project(id = s"tafto-${name}",  base = file(s"modules/$name"))
   .settings(
     libraryDependencies ++= Seq(
-      "io.github.dimitarg"  %%  "weaver-test-extra" % "0.5.11" % "test"
+      "io.github.dimitarg"  %%  "weaver-test-extra" % "0.5.11" % "test",
+      "org.scalacheck" %% "scalacheck" % "1.18.1",
     )
   )
   .settings(
@@ -39,6 +40,7 @@ lazy val core = module("core")
     libraryDependencies ++= Seq(
       "io.github.iltotore" %% "iron" % ironVersion,
       "io.github.iltotore" %% "iron-cats" % ironVersion,
+      "io.github.iltotore" %% "iron-scalacheck" % ironVersion  % "test",
       // we depend on ciris in core because domain data types reuse `Secret` datatype.
       "is.cir" %% "ciris" % "3.6.0",
       "com.github.cb372" %% "cats-retry" % "3.1.3",
@@ -62,6 +64,7 @@ lazy val migrations = module("migrations")
 lazy val persist = module("persist")
   .dependsOn(
     config,
+    core % "compile->compile;test->test",
     testContainers % "test",
     migrations % "test"
   )

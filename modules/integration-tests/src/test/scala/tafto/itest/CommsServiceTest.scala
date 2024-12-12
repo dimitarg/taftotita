@@ -23,6 +23,7 @@ import _root_.io.github.iltotore.iron.*
 import _root_.io.github.iltotore.iron.constraint.numeric.*
 import tafto.service.util.Retry
 import monocle.syntax.all.*
+import tafto.testutil.Generators.*
 import tafto.persist.testutil.ChannelIdGenerator
 
 object CommsServiceTest:
@@ -40,16 +41,9 @@ object CommsServiceTest:
             emailMessageRepo = PgEmailMessageRepo(db, chanId)
             commsService = CommsService(emailMessageRepo, emailSender, PollingConfig.default)
 
-            msg = EmailMessage(
-              subject = Some("Comms baseline test"),
-              to = List(Email("foo@bar.baz")),
-              cc = List(Email("cc@example.com")),
-              bcc = List(Email("bcc1@example.com"), Email("bcc2@example.com")),
-              body = Some("Hello there")
-            )
-
             result <- commsService.run.take(1).compile.drain.background.use { awaitFinished =>
               for
+                msg <- emailMessageGen.sampleIO
                 _ <- commsService.scheduleEmails(NonEmptyList.one(msg))
                 _ <- awaitFinished.void
                 sent <- emailSender.getEmails
@@ -69,16 +63,9 @@ object CommsServiceTest:
             emailMessageRepo = PgEmailMessageRepo(db, chanId)
             commsService = CommsService(emailMessageRepo, emailSender, PollingConfig.default)
 
-            msg = EmailMessage(
-              subject = Some("Comms error test"),
-              to = List(Email("foo@bar.baz")),
-              cc = List(Email("cc@example.com")),
-              bcc = List(Email("bcc1@example.com"), Email("bcc2@example.com")),
-              body = Some("Hello there")
-            )
-
             result <- commsService.run.take(1).compile.drain.background.use { awaitFinished =>
               for
+                msg <- emailMessageGen.sampleIO
                 scheduledIds <- commsService.scheduleEmails(NonEmptyList.one(msg))
                 _ <- awaitFinished.flatMap(_.embedError)
                 dbEmails <- scheduledIds.traverse(emailMessageRepo.getMessage).map(_.flatten)
@@ -91,14 +78,7 @@ object CommsServiceTest:
             chanId <- channelGen.next
             tempChanId <- channelGen.next
             emailSender <- RefBackedEmailSender.make[IO]
-            msg = EmailMessage(
-              subject = Some("Comms error test"),
-              to = List(Email("foo@bar.baz")),
-              cc = List(Email("cc@example.com")),
-              bcc = List(Email("bcc1@example.com"), Email("bcc2@example.com")),
-              body = Some("Hello there")
-            )
-            msgs = NonEmptyList(msg, List.fill(9)(msg))
+            msgs <- nelOfSize(10)(emailMessageGen).sampleIO
             tempEmailMessageRepo = PgEmailMessageRepo(db, tempChanId)
             ids <- tempEmailMessageRepo.scheduleMessages(msgs)
             longAgo = OffsetDateTime.ofInstant(Instant.ofEpochMilli(42), ZoneOffset.UTC)
@@ -128,14 +108,7 @@ object CommsServiceTest:
           for
             chanId <- channelGen.next
             emailSender <- RefBackedEmailSender.make[IO]
-            msg = EmailMessage(
-              subject = Some("Comms - reschedule claimed test"),
-              to = List(Email("foo@bar.baz")),
-              cc = List(Email("cc@example.com")),
-              bcc = List(Email("bcc1@example.com"), Email("bcc2@example.com")),
-              body = Some("Hello there")
-            )
-            msgs = NonEmptyList(msg, List.fill(3)(msg))
+            msgs <- nelOfSize(4)(emailMessageGen).sampleIO
             tempEmailMessageRepo = PgEmailMessageRepo(db, chanId)
             ids <- tempEmailMessageRepo.scheduleMessages(msgs)
 
@@ -182,14 +155,7 @@ object CommsServiceTest:
             chanId <- channelGen.next
             tempChanId <- channelGen.next
             emailSender <- RefBackedEmailSender.make[IO]
-            msg = EmailMessage(
-              subject = Some("Comms error test"),
-              to = List(Email("foo@bar.baz")),
-              cc = List(Email("cc@example.com")),
-              bcc = List(Email("bcc1@example.com"), Email("bcc2@example.com")),
-              body = Some("Hello there")
-            )
-            msgs = NonEmptyList(msg, List.fill(9)(msg))
+            msgs <- nelOfSize(10)(emailMessageGen).sampleIO
             tempEmailMessageRepo = PgEmailMessageRepo(db, tempChanId)
             backfillIds <- tempEmailMessageRepo.scheduleMessages(msgs)
 
@@ -216,17 +182,9 @@ object CommsServiceTest:
               EmailSender.retrying(retryPolicy)(emailSender),
               PollingConfig.default
             )
-
-            msg = EmailMessage(
-              subject = Some("Comms error retry test"),
-              to = List(Email("foo@bar.baz")),
-              cc = List(Email("cc@example.com")),
-              bcc = List(Email("bcc1@example.com"), Email("bcc2@example.com")),
-              body = Some("Hello there")
-            )
-
             result <- commsService.run.take(1).compile.drain.background.use { awaitFinished =>
               for
+                msg <- emailMessageGen.sampleIO
                 scheduledIds <- commsService.scheduleEmails(NonEmptyList.one(msg))
                 _ <- awaitFinished.flatMap(_.embedError)
                 dbEmails <- scheduledIds.traverse(emailMessageRepo.getMessage).map(_.flatten)

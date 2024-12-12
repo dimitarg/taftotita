@@ -3,7 +3,6 @@ package tafto.itest
 import cats.implicits.*
 import scala.concurrent.duration.*
 import cats.effect.*
-import cats.data.NonEmptyList
 import io.github.iltotore.iron.*
 import io.github.iltotore.iron.constraint.numeric.Positive
 import tafto.persist.*
@@ -13,6 +12,7 @@ import tafto.service.comms.{CommsService, PollingConfig}
 import tafto.util.*
 import tafto.domain.*
 import tafto.itest.util.*
+import tafto.testutil.Generators.*
 
 import _root_.io.odin.Logger
 import tafto.persist.testutil.ChannelIdGenerator
@@ -51,24 +51,12 @@ object CommsServiceDuplicationTest:
               .parJoinUnbounded
 
             result <- useBackgroundStream(commsServiceConsumerInstances) {
-              val msg = EmailMessage(
-                subject = Some("Asdf"),
-                to = List(Email("foo@bar.baz")),
-                cc = List(Email("cc@example.com")),
-                bcc = List(Email("bcc1@example.com"), Email("bcc2@example.com")),
-                body = Some("Hello there")
-              )
-              val messages = NonEmptyList(
-                msg,
-                List.fill(testCase.messageSize - 1)(msg)
-              )
-
-              commsService.scheduleEmails(messages).flatMap { ids =>
-                for {
-                  sentEmails <- emailSender.waitForIdleAndGetEmails(5.seconds)
-                } yield expect(sentEmails.size === testCase.messageSize) `and`
-                  expect(sentEmails.map { case (id, _) => id }.toSet === ids.toSet)
-              }
+              for
+                messages <- nelOfSize(testCase.messageSize)(emailMessageGen).sampleIO
+                ids <- commsService.scheduleEmails(messages)
+                sentEmails <- emailSender.waitForIdleAndGetEmails(5.seconds)
+              yield expect(sentEmails.size === testCase.messageSize) `and`
+                expect(sentEmails.map { (id, _) => id }.toSet === ids.toSet)
             }
           yield result
         }
