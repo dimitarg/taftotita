@@ -2,8 +2,7 @@ package tafto.persist
 
 import cats.effect.*
 import fs2.Stream
-import skunk.data.Identifier
-import skunk.data.Notification
+import skunk.data.{Identifier, Notification}
 
 object TestChannelListener:
   def make[F[_]](database: Database[F], channelId: Identifier): Resource[F, Stream[F, String]] = for

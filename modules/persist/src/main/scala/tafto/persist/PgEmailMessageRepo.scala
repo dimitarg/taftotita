@@ -6,10 +6,10 @@ import cats.implicits.*
 import fs2.Stream
 import io.github.iltotore.iron.autoRefine
 import io.github.iltotore.iron.cats.given
+import natchez.*
 import skunk.Session
 import skunk.codec.all.*
-import skunk.data.Completion
-import skunk.data.Identifier
+import skunk.data.{Completion, Identifier}
 import skunk.implicits.*
 import tafto.domain.*
 import tafto.domain.EmailMessage.Id
@@ -19,58 +19,76 @@ import tafto.util.*
 
 import java.time.OffsetDateTime
 
-final case class PgEmailMessageRepo[F[_]: Time: MonadCancelThrow](
+final case class PgEmailMessageRepo[F[_]: Time: MonadCancelThrow: Trace](
     database: Database[F],
     channelId: Identifier
 ) extends EmailMessageRepo[F]:
   override def scheduleMessages(messages: NonEmptyList[EmailMessage]): F[List[EmailMessage.Id]] =
-    database.transact { s =>
-      for
-        now <- Time[F].utc
-        result <- Database.batched(s)(EmailMessageQueries.insertMessages)(messages.map { x =>
-          (x, EmailStatus.Scheduled, now)
-        })
-        _ <- notify(s, result)
-      yield result
+    span("scheduleMessages")("payload.size" -> messages.size) {
+      database.transact { s =>
+        for
+          now <- Time[F].utc
+          result <- Database.batched(s)(EmailMessageQueries.insertMessages)(messages.map { x =>
+            (x, EmailStatus.Scheduled, now)
+          })
+          _ <- notify(s, result)
+        yield result
+      }
     }
 
   private def notify(s: Session[F], ids: List[EmailMessage.Id]): F[Unit] =
-    val channel = s.channel(channelId)
-    ids.traverse_(x => channel.notify(x.show))
-
-  override def getMessage(id: EmailMessage.Id): F[Option[(EmailMessage, EmailStatus)]] =
-    database.pool.use { s =>
-      s.option(EmailMessageQueries.getMessage)(id)
+    span("notify")("payload.size" -> ids.size) {
+      val channel = s.channel(channelId)
+      ids.traverse_(x => channel.notify(x.show))
     }
 
-  override def getScheduledIds(scheduledAtOrBefore: OffsetDateTime): F[List[EmailMessage.Id]] = database.pool.use { s =>
-    s.execute(EmailMessageQueries.getScheduledIds)(scheduledAtOrBefore)
-  }
+  override def getMessage(id: EmailMessage.Id): F[Option[(EmailMessage, EmailStatus)]] =
+    span("getMessage")("id" -> id) {
+      database.pool.use { s =>
+        s.option(EmailMessageQueries.getMessage)(id)
+      }
+    }
 
-  override def getClaimedIds(claimedAtOrBefore: OffsetDateTime): F[List[Id]] = database.pool.use { s =>
-    s.execute(EmailMessageQueries.getClaimedIds)(claimedAtOrBefore)
+  override def getScheduledIds(scheduledAtOrBefore: OffsetDateTime): F[List[EmailMessage.Id]] =
+    Trace[F].span("getScheduledIds") {
+      database.pool.use { s =>
+        s.execute(EmailMessageQueries.getScheduledIds)(scheduledAtOrBefore)
+      }
+    }
+
+  override def getClaimedIds(claimedAtOrBefore: OffsetDateTime): F[List[Id]] = Trace[F].span("getClaimedIds") {
+    database.pool.use { s =>
+      s.execute(EmailMessageQueries.getClaimedIds)(claimedAtOrBefore)
+    }
   }
 
   override def claim(id: EmailMessage.Id): F[Option[EmailMessage]] =
-    Time[F].utc.flatMap { now =>
-      updateStatusReturning(UpdateStatus.claim(id, now))
+    span("claim")("id" -> id) {
+      Time[F].utc.flatMap { now =>
+        updateStatusReturning(UpdateStatus.claim(id, now))
+      }
     }
 
   override def markAsSent(id: EmailMessage.Id): F[Boolean] =
-    Time[F].utc.flatMap { now =>
-      updateStatus(UpdateStatus.markAsSent(id, now))
+    span("markAsSent")("id" -> id) {
+      Time[F].utc.flatMap { now =>
+        updateStatus(UpdateStatus.markAsSent(id, now))
+      }
     }
 
-  override def markAsError(id: EmailMessage.Id, error: String): F[Boolean] = for
-    now <- Time[F].utc
-    result <- database.pool.use { s =>
+  override def markAsError(id: EmailMessage.Id, error: String): F[Boolean] =
+    span("markAsError")("id" -> id) {
       for
-        command <- s.prepare(EmailMessageQueries.updateStatusAndError)
-        completion <- command.execute((UpdateStatus.markAsError(id, now), error))
-        result = wasUpdated(completion)
+        now <- Time[F].utc
+        result <- database.pool.use { s =>
+          for
+            command <- s.prepare(EmailMessageQueries.updateStatusAndError)
+            completion <- command.execute((UpdateStatus.markAsError(id, now), error))
+            result = wasUpdated(completion)
+          yield result
+        }
       yield result
     }
-  yield result
 
   private def updateStatus(updateStatus: UpdateStatus): F[Boolean] = for result <- database.pool.use { s =>
       for
@@ -110,6 +128,16 @@ final case class PgEmailMessageRepo[F[_]: Time: MonadCancelThrow](
   override def notify(messages: List[EmailMessage.Id]): F[Unit] = database.pool.use { s =>
     notify(s, messages)
   }
+
+  private def span[A](name: String)(fields: (String, TraceValue)*)(prg: F[A]): F[A] =
+    Trace[F].span(name = name) {
+      for
+        _ <- Trace[F].put(fields*)
+        result <- prg
+      yield result
+    }
+
+  given idTraceable: TraceableValue[EmailMessage.Id] = x => TraceValue.NumberValue(x.value)
 
 object EmailMessageQueries:
 

@@ -1,8 +1,7 @@
 package tafto.itest.util
 
 import cats.MonadThrow
-import cats.effect.Ref
-import cats.effect.Sync
+import cats.effect.{Ref, Sync}
 import cats.implicits.*
 import io.github.iltotore.iron.*
 import io.github.iltotore.iron.constraint.numeric.*

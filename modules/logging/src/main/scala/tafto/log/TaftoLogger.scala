@@ -1,9 +1,8 @@
 package tafto.log
 
-import cats.effect.IO
-import cats.effect.Sync
 import cats.effect.std.Dispatcher
 import cats.effect.unsafe.implicits.global
+import cats.effect.{IO, Sync}
 import io.odin.*
 import io.odin.slf4j.OdinLoggerServiceProvider
 

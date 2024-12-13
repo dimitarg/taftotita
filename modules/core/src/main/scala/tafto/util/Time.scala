@@ -4,9 +4,7 @@ import cats.Functor
 import cats.effect.Clock
 import cats.implicits.*
 
-import java.time.Instant
-import java.time.OffsetDateTime
-import java.time.ZoneOffset
+import java.time.{Instant, OffsetDateTime, ZoneOffset}
 
 trait Time[F[_]]:
   def instant: F[Instant]

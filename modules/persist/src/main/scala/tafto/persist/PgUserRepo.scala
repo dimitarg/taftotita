@@ -5,8 +5,7 @@ import cats.implicits.*
 import skunk.codec.all as skunkCodecs
 import skunk.implicits.*
 import tafto.domain.*
-import tafto.service.PasswordHasher
-import tafto.service.UserRepo
+import tafto.service.{PasswordHasher, UserRepo}
 import tafto.util.NonEmptyString
 
 final case class PgUserRepo[F[_]: MonadCancelThrow](database: Database[F], passwordHasher: PasswordHasher[F])

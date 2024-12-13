@@ -9,13 +9,12 @@ import io.github.iltotore.iron.constraint.numeric.*
 import io.github.iltotore.iron.{cats as _, *}
 import io.odin.Logger
 import monocle.syntax.all.*
+import natchez.Trace
 import tafto.domain.*
 import tafto.itest.util.*
 import tafto.persist.*
 import tafto.persist.testutil.ChannelIdGenerator
-import tafto.service.comms.CommsService
-import tafto.service.comms.EmailSender
-import tafto.service.comms.PollingConfig
+import tafto.service.comms.{CommsService, EmailSender, PollingConfig}
 import tafto.service.util.Retry
 import tafto.testutil.Generators.*
 import tafto.util.*
@@ -27,7 +26,8 @@ import scala.concurrent.duration.*
 object CommsServiceTest:
 
   def tests(db: Database[IO], channelGen: ChannelIdGenerator[IO])(using
-      logger: Logger[IO]
+      logger: Logger[IO],
+      trace: Trace[IO]
   ): Stream[IO, Test] =
     seqSuite(
       List(

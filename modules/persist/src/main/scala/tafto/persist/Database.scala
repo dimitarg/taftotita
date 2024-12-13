@@ -8,8 +8,7 @@ import fs2.Stream
 import fs2.io.net.Network
 import natchez.Trace
 import skunk.*
-import skunk.data.Identifier
-import skunk.data.Notification
+import skunk.data.{Identifier, Notification}
 import tafto.config.DatabaseConfig
 
 final case class Database[F[_]: MonadCancelThrow](pool: Resource[F, Session[F]]):

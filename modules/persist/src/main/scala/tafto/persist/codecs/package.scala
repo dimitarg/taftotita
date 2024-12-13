@@ -2,8 +2,7 @@ package tafto.persist
 
 import _root_.skunk.Codec
 import _root_.skunk.codec.all.*
-import _root_.skunk.data.Arr
-import _root_.skunk.data.Type
+import _root_.skunk.data.{Arr, Type}
 import cats.implicits.*
 import io.github.iltotore.iron.*
 import io.github.iltotore.iron.skunk.*

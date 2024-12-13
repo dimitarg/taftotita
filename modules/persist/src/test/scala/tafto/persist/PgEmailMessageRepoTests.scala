@@ -6,6 +6,7 @@ import cats.implicits.*
 import fs2.Stream
 import io.github.iltotore.iron.autoRefine
 import io.github.iltotore.iron.cats.given
+import natchez.Trace
 import tafto.domain.*
 import tafto.persist.testutil.ChannelIdGenerator
 import tafto.service.comms.EmailMessageRepo
@@ -15,7 +16,9 @@ import weaver.pure.*
 
 object PgEmailMessageRepoTests:
 
-  def tests(db: Database[IO], channelGen: ChannelIdGenerator[IO]): Stream[IO, Test] =
+  def tests(db: Database[IO], channelGen: ChannelIdGenerator[IO])(using
+      trace: Trace[IO]
+  ): Stream[IO, Test] =
     parSuite(
       List(
         test("PgEmailMessageRepo.scheduleMessages can insert a single message") {

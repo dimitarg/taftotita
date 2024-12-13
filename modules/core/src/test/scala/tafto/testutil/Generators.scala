@@ -5,8 +5,7 @@ import cats.effect.*
 import io.github.iltotore.iron.*
 import io.github.iltotore.iron.constraint.numeric.Positive
 import org.scalacheck.Gen
-import tafto.domain.Email
-import tafto.domain.EmailMessage
+import tafto.domain.{Email, EmailMessage}
 import tafto.util.NonEmpty
 
 object Generators:

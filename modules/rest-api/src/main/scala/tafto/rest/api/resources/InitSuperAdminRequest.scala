@@ -1,8 +1,7 @@
 package tafto.rest.api.resources
 
-import io.circe.Codec
-import io.circe.Decoder
 import io.circe.generic.semiauto.*
+import io.circe.{Codec, Decoder}
 import io.github.iltotore.iron.cats.given
 import io.github.iltotore.iron.circe.given
 import sttp.tapir.Schema

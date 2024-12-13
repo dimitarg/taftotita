@@ -5,8 +5,7 @@ import cats.effect.*
 import cats.implicits.*
 import io.github.iltotore.iron.{skunk as _, *}
 import skunk.data.Identifier
-import tafto.persist.ChannelId
-import tafto.persist.ValidChannelId
+import tafto.persist.{ChannelId, ValidChannelId}
 import tafto.util.*
 
 final case class ChannelIdGenerator[F[_]: MonadThrow](

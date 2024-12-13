@@ -2,8 +2,7 @@ package tafto
 
 import ciris.Secret
 import io.github.iltotore.iron.RefinedTypeOps
-import tafto.util.NonEmpty
-import tafto.util.NonEmptyString
+import tafto.util.{NonEmpty, NonEmptyString}
 
 package object config:
 
