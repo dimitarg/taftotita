@@ -3,10 +3,14 @@ package tafto.service.comms
 import cats.data.NonEmptyList
 import cats.effect.*
 import cats.implicits.*
+import cats.mtl.Local
 import fs2.Stream
 import io.odin.Logger
+import natchez.{EntryPoint, Span, Trace}
 import tafto.domain.*
 import tafto.util.Time
+import tafto.util.tracing.SpanLocal
+import tafto.util.tracing.given
 
 import scala.concurrent.duration.*
 
@@ -28,7 +32,7 @@ trait CommsService[F[_]]:
       .concurrently(run)
 
 object CommsService:
-  def apply[F[_]: Temporal: Logger](
+  def apply[F[_]: Temporal: Logger: Trace: EntryPoint: SpanLocal](
       emailMessageRepo: EmailMessageRepo[F],
       emailSender: EmailSender[F],
       pollingConfig: PollingConfig
@@ -46,17 +50,22 @@ object CommsService:
           }
 
       private def processMessage(id: EmailMessage.Id): F[Unit] =
-        for
-          _ <- Logger[F].debug(s"Processing message $id.")
-          maybeMessage <- emailMessageRepo.claim(id)
-          _ <- maybeMessage match
-            case None =>
-              Logger[F].debug(
-                s"Could not claim message $id for sending as it was already claimed by another process, or does not exist."
-              )
-            case Some(message) =>
-              processClaimedMessage(id, message)
-        yield ()
+        summon[EntryPoint[F]].root("processMessage").use { root =>
+          val result = for
+            _ <- Trace[F].put("id" -> id)
+            _ <- Logger[F].debug(s"Processing message $id.")
+            maybeMessage <- emailMessageRepo.claim(id)
+            _ <- maybeMessage match
+              case None =>
+                Logger[F].debug(
+                  s"Could not claim message $id for sending as it was already claimed by another process, or does not exist."
+                )
+              case Some(message) =>
+                processClaimedMessage(id, message)
+          yield ()
+
+          Local[F, Span[F]].scope(result)(root)
+        }
 
       private def processClaimedMessage(id: EmailMessage.Id, message: EmailMessage): F[Unit] =
         for
@@ -117,29 +126,29 @@ object CommsService:
         }
       yield result
 
-final case class PollingConfig(
-    forScheduled: ScheduledMessagesPollingConfig,
-    forClaimed: ClaimedMessagesPollingConfig
-)
-
-object PollingConfig:
-  val default: PollingConfig = PollingConfig(
-    forScheduled = ScheduledMessagesPollingConfig(
-      messageAge = 1.minute,
-      pollingInterval = 30.seconds
-    ),
-    forClaimed = ClaimedMessagesPollingConfig(
-      timeToLive = 30.seconds,
-      pollingInterval = 30.seconds
-    )
+  final case class PollingConfig(
+      forScheduled: ScheduledMessagesPollingConfig,
+      forClaimed: ClaimedMessagesPollingConfig
   )
 
-final case class ScheduledMessagesPollingConfig(
-    messageAge: FiniteDuration,
-    pollingInterval: FiniteDuration
-)
+  object PollingConfig:
+    val default: PollingConfig = PollingConfig(
+      forScheduled = ScheduledMessagesPollingConfig(
+        messageAge = 1.minute,
+        pollingInterval = 30.seconds
+      ),
+      forClaimed = ClaimedMessagesPollingConfig(
+        timeToLive = 30.seconds,
+        pollingInterval = 30.seconds
+      )
+    )
 
-final case class ClaimedMessagesPollingConfig(
-    timeToLive: FiniteDuration,
-    pollingInterval: FiniteDuration
-)
+  final case class ScheduledMessagesPollingConfig(
+      messageAge: FiniteDuration,
+      pollingInterval: FiniteDuration
+  )
+
+  final case class ClaimedMessagesPollingConfig(
+      timeToLive: FiniteDuration,
+      pollingInterval: FiniteDuration
+  )

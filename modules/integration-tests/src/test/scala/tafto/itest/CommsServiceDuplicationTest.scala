@@ -2,23 +2,28 @@ package tafto.itest
 
 import cats.effect.*
 import cats.implicits.*
+import cats.mtl.Local
 import fs2.{io as _, *}
 import io.github.iltotore.iron.constraint.numeric.Positive
 import io.github.iltotore.iron.{cats as _, *}
 import io.odin.Logger
-import natchez.Trace
+import natchez.{EntryPoint, Span, Trace}
 import tafto.domain.*
 import tafto.itest.util.*
 import tafto.persist.*
 import tafto.persist.testutil.ChannelIdGenerator
-import tafto.service.comms.{CommsService, PollingConfig}
+import tafto.service.comms.CommsService
+import tafto.service.comms.CommsService.PollingConfig
 import tafto.testutil.Generators.*
+import tafto.testutil.tracing.noOpSpanLocal
 import tafto.util.*
 import weaver.pure.*
 
 import scala.concurrent.duration.*
 
 object CommsServiceDuplicationTest:
+
+  given noOpLocal: Local[IO, Span[IO]] = noOpSpanLocal
 
   final case class TestCase(
       messageSize: Int :| Positive,
@@ -33,7 +38,8 @@ object CommsServiceDuplicationTest:
 
   def tests(db: Database[IO], channelGen: ChannelIdGenerator[IO])(using
       logger: Logger[IO],
-      trace: Trace[IO]
+      trace: Trace[IO],
+      entryPoint: EntryPoint[IO]
   ): Stream[IO, Test] =
     seqSuite(
       testCases.map { testCase =>

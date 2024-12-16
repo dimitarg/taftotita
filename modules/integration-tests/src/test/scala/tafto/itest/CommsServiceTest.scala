@@ -3,20 +3,23 @@ package tafto.itest
 import cats.data.NonEmptyList
 import cats.effect.*
 import cats.implicits.*
+import cats.mtl.Local
 import fs2.{io as _, *}
 import io.github.iltotore.iron.cats.given
 import io.github.iltotore.iron.constraint.numeric.*
 import io.github.iltotore.iron.{cats as _, *}
 import io.odin.Logger
 import monocle.syntax.all.*
-import natchez.Trace
+import natchez.{EntryPoint, Span, Trace}
 import tafto.domain.*
 import tafto.itest.util.*
 import tafto.persist.*
 import tafto.persist.testutil.ChannelIdGenerator
-import tafto.service.comms.{CommsService, EmailSender, PollingConfig}
+import tafto.service.comms.CommsService.PollingConfig
+import tafto.service.comms.{CommsService, EmailSender}
 import tafto.service.util.Retry
 import tafto.testutil.Generators.*
+import tafto.testutil.tracing.*
 import tafto.util.*
 import weaver.pure.*
 
@@ -25,9 +28,11 @@ import scala.concurrent.duration.*
 
 object CommsServiceTest:
 
+  given noOpLocal: Local[IO, Span[IO]] = noOpSpanLocal
   def tests(db: Database[IO], channelGen: ChannelIdGenerator[IO])(using
       logger: Logger[IO],
-      trace: Trace[IO]
+      trace: Trace[IO],
+      entryPoint: EntryPoint[IO]
   ): Stream[IO, Test] =
     seqSuite(
       List(

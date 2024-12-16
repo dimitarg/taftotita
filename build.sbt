@@ -4,9 +4,10 @@ ThisBuild / scalaVersion := "3.3.4"
 
 val testcontainersScalaVersion = "0.41.4"
 val ironVersion = "2.6.0"
-val http4sVersion = "0.23.29"
-val tapirVersion = "1.11.8"
-val monocleVersion = "3.1.0"
+val http4sVersion = "0.23.30"
+val tapirVersion = "1.11.10"
+val monocleVersion = "3.3.0"
+val natchezVersion = "0.3.5"
 
 def module(name: String): Project = Project(id = s"tafto-${name}",  base = file(s"modules/$name"))
   .settings(
@@ -46,10 +47,14 @@ lazy val core = module("core")
       "io.github.iltotore" %% "iron-cats" % ironVersion,
       "io.github.iltotore" %% "iron-scalacheck" % ironVersion  % "test",
       // we depend on ciris in core because domain data types reuse `Secret` datatype.
-      "is.cir" %% "ciris" % "3.6.0",
+      "is.cir" %% "ciris" % "3.7.0",
       "com.github.cb372" %% "cats-retry" % "3.1.3",
       "dev.optics" %% "monocle-core"  % monocleVersion,
       "dev.optics" %% "monocle-macro" % monocleVersion,
+      "org.tpolecat" %% "natchez-core" % natchezVersion,
+      "org.tpolecat" %% "natchez-noop" % natchezVersion,
+      "org.tpolecat" %% "natchez-mtl" % natchezVersion,
+      "org.tpolecat" %% "natchez-honeycomb" % natchezVersion,
     )
   )
 
@@ -60,7 +65,7 @@ lazy val migrations = module("migrations")
   .dependsOn(config)
   .settings(
     libraryDependencies ++= Seq(
-      "org.flywaydb" % "flyway-database-postgresql" % "10.20.1",
+      "org.flywaydb" % "flyway-database-postgresql" % "11.1.0",
       "org.postgresql" % "postgresql" % "42.7.4"
     )
   )
@@ -70,7 +75,7 @@ lazy val persist = module("persist")
     config,
     core % "compile->compile;test->test",
     testContainers % "test",
-    migrations % "test"
+    migrations % "test",
   )
   .settings(
     libraryDependencies ++= Seq(
@@ -123,10 +128,13 @@ lazy val localDev = module("local-dev")
 lazy val integrationTests = module("integration-tests")
   .dependsOn(migrations, persist % "compile->compile;test->test", restServer, crypto, testContainers)
 
+lazy val loadTests = module("load-tests")
+  .dependsOn(migrations, persist, testContainers)
+
 // make sure any test projects spinning up docker containers run in sequence, so resource usage stays sane.
 (integrationTests / test) := ((integrationTests / Test / test) dependsOn (persist / Test / test)).value
 
 
 lazy val root = (project in file("."))
-  .aggregate(logging, core, migrations, config, persist, testContainers, restApi, restServer, localDev, crypto, integrationTests)
+  .aggregate(logging, core, migrations, config, persist, testContainers, restApi, restServer, localDev, crypto, integrationTests, loadTests)
 

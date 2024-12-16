@@ -4,7 +4,8 @@ import cats.effect.*
 import cats.implicits.*
 import fs2.Stream
 import io.odin.Logger
-import natchez.Trace
+import natchez.noop.NoopEntrypoint
+import natchez.{EntryPoint, Trace}
 import tafto.db.DatabaseMigrator
 import tafto.log.defaultLogger
 import tafto.persist.Database
@@ -16,6 +17,7 @@ object AllIntegrationTests extends Suite:
 
   given trace: Trace[IO] = Trace.Implicits.noop
   given logger: Logger[IO] = defaultLogger
+  given ep: EntryPoint[IO] = NoopEntrypoint[IO]()
 
   val dbResource: Resource[IO, Database[IO]] = for
     pg <- Postgres.make(dataBind = None, tailLog = true)

@@ -1,5 +1,6 @@
 package tafto.persist
 
+import cats.MonadThrow
 import cats.data.NonEmptyList
 import cats.effect.kernel.MonadCancelThrow
 import cats.implicits.*
@@ -16,6 +17,7 @@ import tafto.domain.EmailMessage.Id
 import tafto.persist.codecs.*
 import tafto.service.comms.EmailMessageRepo
 import tafto.util.*
+import tafto.util.tracing.{*, given}
 
 import java.time.OffsetDateTime
 
@@ -129,16 +131,6 @@ final case class PgEmailMessageRepo[F[_]: Time: MonadCancelThrow: Trace](
     notify(s, messages)
   }
 
-  private def span[A](name: String)(fields: (String, TraceValue)*)(prg: F[A]): F[A] =
-    Trace[F].span(name = name) {
-      for
-        _ <- Trace[F].put(fields*)
-        result <- prg
-      yield result
-    }
-
-  given idTraceable: TraceableValue[EmailMessage.Id] = x => TraceValue.NumberValue(x.value)
-
 object EmailMessageQueries:
 
   val domainEmailMessageCodec =
@@ -234,3 +226,6 @@ object UpdateStatus:
     newStatus = EmailStatus.Error,
     updatedAt = updatedAt
   )
+
+object PgEmailMessageRepo:
+  def defaultChannelId[F[_]: MonadThrow]: F[Identifier] = ChannelId.apply("email_messages").orThrow[F]
