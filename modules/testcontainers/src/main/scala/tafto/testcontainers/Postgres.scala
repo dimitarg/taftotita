@@ -23,7 +23,7 @@ object Postgres:
 
   val imageName = DockerImageName.parse("postgres:17.1").asCompatibleSubstituteFor("postgres")
 
-  def make(dataBind: Option[ValidHostFsBind], tailLog: Boolean): Resource[IO, Postgres] =
+  def make(dataBind: Option[ValidHostFsBind], tailLog: Boolean, reenableFsync: Boolean): Resource[IO, Postgres] =
     Resource
       .fromAutoCloseable {
         IO.blocking {
@@ -49,6 +49,9 @@ object Postgres:
                     .withStartupTimeout(Duration.of(60, ChronoUnit.SECONDS))
                 )
             }
+
+            if reenableFsync then
+              c.setCommand("postgres") // as opposed to setCommand("postgres", "-c", FSYNC_OFF_OPTION);
           }
           container.start()
           container

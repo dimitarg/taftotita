@@ -22,9 +22,11 @@ object FsBind:
 
 final case class ContainersConfig(
     pgCache: Option[FsBind],
-    tailContainerLog: Boolean
+    tailContainerLog: Boolean,
+    reenableFsync: Boolean
 )
 
 object ContainersConfig:
-  val default = ContainersConfig(pgCache = None, tailContainerLog = false)
-  val localDev = ContainersConfig(pgCache = FsBind.forPgDocker.some, tailContainerLog = true)
+  val test = ContainersConfig(pgCache = None, tailContainerLog = false, reenableFsync = false)
+  val localDev = ContainersConfig(pgCache = FsBind.forPgDocker.some, tailContainerLog = true, reenableFsync = true)
+  val loadTest = ContainersConfig(pgCache = None, tailContainerLog = true, reenableFsync = true)

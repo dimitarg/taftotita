@@ -6,7 +6,7 @@ import fs2.Stream
 import natchez.Trace
 import tafto.db.DatabaseMigrator
 import tafto.persist.testutil.ChannelIdGenerator
-import tafto.testcontainers.Postgres
+import tafto.testcontainers.*
 import weaver.pure.*
 
 object AllPersistIntegrationTests extends Suite:
@@ -14,8 +14,8 @@ object AllPersistIntegrationTests extends Suite:
   given trace: Trace[IO] = Trace.Implicits.noop
 
   val dbResource: Resource[IO, Database[IO]] = for
-    pg <- Postgres.make(dataBind = None, tailLog = true)
-    config = pg.databaseConfig
+    containers <- Containers.make(ContainersConfig.test)
+    config = containers.postgres.databaseConfig
     db <- Database.make(config)
     _ <- Resource.eval(DatabaseMigrator.migrate(config))
   yield db

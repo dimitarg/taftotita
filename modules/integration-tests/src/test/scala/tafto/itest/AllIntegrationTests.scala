@@ -10,7 +10,7 @@ import tafto.db.DatabaseMigrator
 import tafto.log.defaultLogger
 import tafto.persist.Database
 import tafto.persist.testutil.ChannelIdGenerator
-import tafto.testcontainers.Postgres
+import tafto.testcontainers.*
 import weaver.pure.*
 
 object AllIntegrationTests extends Suite:
@@ -20,8 +20,8 @@ object AllIntegrationTests extends Suite:
   given ep: EntryPoint[IO] = NoopEntrypoint[IO]()
 
   val dbResource: Resource[IO, Database[IO]] = for
-    pg <- Postgres.make(dataBind = None, tailLog = true)
-    config = pg.databaseConfig
+    containers <- Containers.make(ContainersConfig.test)
+    config = containers.postgres.databaseConfig
     db <- Database.make(config)
     _ <- Resource.eval(DatabaseMigrator.migrate(config))
   yield db

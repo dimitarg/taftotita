@@ -130,6 +130,11 @@ lazy val integrationTests = module("integration-tests")
 
 lazy val loadTests = module("load-tests")
   .dependsOn(migrations, persist, testContainers)
+  .settings(
+    javaOptions ++= Seq(
+      "-Xms8g"
+    )
+  )
 
 // make sure any test projects spinning up docker containers run in sequence, so resource usage stays sane.
 (integrationTests / test) := ((integrationTests / Test / test) dependsOn (persist / Test / test)).value

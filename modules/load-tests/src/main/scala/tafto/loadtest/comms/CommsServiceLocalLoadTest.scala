@@ -15,8 +15,11 @@ import tafto.log.defaultLogger
 import tafto.persist.*
 import tafto.service.comms.CommsService
 import tafto.service.comms.CommsService.PollingConfig
-import tafto.testcontainers.Postgres
+import tafto.testcontainers.*
 import tafto.util.tracing.*
+
+// find more reliable way to measure max duration as opposed to sum of trace durations
+// consider xmx8g
 
 object CommsServiceLocalLoadTest extends IOApp.Simple:
 
@@ -25,17 +28,18 @@ object CommsServiceLocalLoadTest extends IOApp.Simple:
 
   val makeTestResources: Resource[TracedIO, TestResources] =
     for
-      pg <- Postgres.make(dataBind = None, tailLog = true).mapK(Kleisli.liftK)
-      config = pg.databaseConfig
+      containers <- Containers.make(ContainersConfig.loadTest).mapK(Kleisli.liftK)
+      config = containers.postgres.databaseConfig
       _ <- Resource.eval(DatabaseMigrator.migrate[TracedIO](config))
       commsDb <- Database.make[TracedIO](config)
       testDb <- Database.make[TracedIO](config)
       testRunUUID <- Resource.eval(UUIDGen[TracedIO].randomUUID)
+      tracingGlobalFields = Map("test.uuid" -> testRunUUID.toString())
       commsEp <- honeycombEntryPoint[TracedIO](
         serviceName = "tafto-comms",
-        globalFields = Map("test.uuid" -> testRunUUID.toString())
+        globalFields = tracingGlobalFields
       )
-      testEp <- honeycombEntryPoint[IO]("tafto-load-tests", globalFields = Map()).mapK(Kleisli.liftK)
+      testEp <- honeycombEntryPoint[IO]("tafto-load-tests", globalFields = tracingGlobalFields).mapK(Kleisli.liftK)
 
       channelId <- Resource.eval(PgEmailMessageRepo.defaultChannelId[TracedIO])
 
