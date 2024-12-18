@@ -15,6 +15,7 @@ import skunk.implicits.*
 import tafto.domain.*
 import tafto.domain.EmailMessage.Id
 import tafto.persist.codecs.*
+import tafto.persist.unsafe.*
 import tafto.service.comms.EmailMessageRepo
 import tafto.util.*
 import tafto.util.tracing.{*, given}
@@ -93,9 +94,9 @@ final case class PgEmailMessageRepo[F[_]: Time: MonadCancelThrow: Trace](
     }
 
   private def updateStatus(updateStatus: UpdateStatus): F[Boolean] = for result <- database.pool.use { s =>
+      val command = EmailMessageQueries.updateStatusSimple(updateStatus)
       for
-        command <- s.prepare(EmailMessageQueries.updateStatus)
-        completion <- command.execute(updateStatus)
+        completion <- s.execute(command)
         result = wasUpdated(completion)
       yield result
     }
@@ -104,11 +105,9 @@ final case class PgEmailMessageRepo[F[_]: Time: MonadCancelThrow: Trace](
   private def updateStatusReturning(updateStatus: UpdateStatus): F[Option[EmailMessage]] =
     for
       now <- Time[F].utc
+      query = EmailMessageQueries.updateStatusReturningSimple(updateStatus)
       result <- database.pool.use { s =>
-        for
-          query <- s.prepare(EmailMessageQueries.updateStatusReturning)
-          result <- query.option(updateStatus)
-        yield result
+        s.option(query)
       }
     yield result
 
@@ -163,7 +162,7 @@ object EmailMessageQueries:
     .query(emailMessageId)
     .contramap[OffsetDateTime] { case updatedAt => (EmailStatus.Claimed, updatedAt) }
 
-  val updateStatus = sql"""
+  val updateStatusFr = sql"""
     with ids as (
       select id from email_messages where id=${emailMessageId} and status=${emailStatus}
       for update skip locked
@@ -171,9 +170,17 @@ object EmailMessageQueries:
     update email_messages m set status=${emailStatus}, updated_at=${timestamptz}
     from ids
     where m.id = ids.id;
-  """.command.contramap[UpdateStatus] { updateStatus =>
-    (updateStatus.id, updateStatus.currentStatus, updateStatus.newStatus, updateStatus.updatedAt)
-  }
+  """
+    .contramap[UpdateStatus] { x =>
+      (x.id, x.currentStatus, x.newStatus, x.updatedAt)
+    }
+
+  def updateStatusSimple(x: UpdateStatus) =
+    updateStatusFr
+      .unsafeInterpolate(x)(
+        shouldQuote = List(false, true, true, true)
+      )
+      .command
 
   val updateStatusAndError = sql"""
     with ids as (
@@ -187,7 +194,7 @@ object EmailMessageQueries:
     (updateStatus.id, updateStatus.currentStatus, updateStatus.newStatus, updateStatus.updatedAt, errorMessage)
   }
 
-  val updateStatusReturning = sql"""
+  val updateStatusReturningFr = sql"""
     with ids as (
       select id from email_messages where id=${emailMessageId} and status=${emailStatus}
       for update skip locked
@@ -196,9 +203,17 @@ object EmailMessageQueries:
     from ids
     where m.id = ids.id
     returning subject, to_, cc, bcc, body;
-  """.query(domainEmailMessageCodec).contramap[UpdateStatus] { updateStatus =>
-    (updateStatus.id, updateStatus.currentStatus, updateStatus.newStatus, updateStatus.updatedAt)
-  }
+  """
+    .contramap[UpdateStatus] { x =>
+      (x.id, x.currentStatus, x.newStatus, x.updatedAt)
+    }
+
+  def updateStatusReturningSimple(x: UpdateStatus) =
+    updateStatusReturningFr
+      .unsafeInterpolate(x)(
+        shouldQuote = List(false, true, true, true)
+      )
+      .query(domainEmailMessageCodec)
 
 final case class UpdateStatus private (
     id: EmailMessage.Id,
