@@ -4,9 +4,8 @@ import cats.MonadThrow
 import cats.data.NonEmptyList
 import cats.effect.kernel.MonadCancelThrow
 import cats.implicits.*
-import fs2.Stream
+import fs2.{Chunk, Stream}
 import io.github.iltotore.iron.autoRefine
-import io.github.iltotore.iron.cats.given
 import natchez.*
 import skunk.Session
 import skunk.codec.all.*
@@ -15,6 +14,7 @@ import skunk.implicits.*
 import tafto.domain.*
 import tafto.domain.EmailMessage.Id
 import tafto.persist.codecs.*
+import tafto.persist.codecs.channel.{ChannelDecoder, ChannelEncoder}
 import tafto.persist.unsafe.*
 import tafto.service.comms.EmailMessageRepo
 import tafto.util.*
@@ -39,10 +39,15 @@ final case class PgEmailMessageRepo[F[_]: Time: MonadCancelThrow: Trace](
       }
     }
 
+  // payload must be less than 8000 bytes under default PG configuration
+  // long max value is 19 digits, max value plus comma separator is 20 bytes in utf-8
+  // this means we must send less than 400 messages. 350 leaves some leeway but this can be increased to 399.
+  private val notifyBatchSize = 350
+
   private def notify(s: Session[F], ids: List[EmailMessage.Id]): F[Unit] =
     span("notify")("payload.size" -> ids.size) {
       val channel = s.channel(channelId)
-      ids.traverse_(x => channel.notify(x.show))
+      ids.grouped(notifyBatchSize).toList.traverse_(xs => channel.notify(ChannelEncoder.emailMessageIds.encode(xs)))
     }
 
   override def getMessage(id: EmailMessage.Id): F[Option[(EmailMessage, EmailStatus)]] =
@@ -115,14 +120,13 @@ final case class PgEmailMessageRepo[F[_]: Time: MonadCancelThrow: Trace](
     case Completion.Update(count) if count > 0 => true
     case _                                     => false
 
-  override val listen: Stream[F, EmailMessage.Id] =
+  override val listen: Stream[F, Chunk[EmailMessage.Id]] =
     database
       .subscribeToChannel(channelId)
       .evalMap { notification =>
         val payload = notification.value
-        payload.toLongOption
-          .toRight(s"Expect EmailMessage.Id, got ${payload}")
-          .map(EmailMessage.Id(_))
+        ChannelDecoder.emailMessageIds
+          .decode(payload)
           .orThrow[F]
       }
 

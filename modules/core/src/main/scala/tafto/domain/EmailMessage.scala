@@ -14,7 +14,8 @@ final case class EmailMessage(
 
 object EmailMessage:
   opaque type Id = Long :| Pure
-  object Id extends RefinedTypeOps[Long, Pure, Id]
+  object Id extends RefinedTypeOps[Long, Pure, Id]:
+    inline def unapplyList(xs: List[Id]): List[Long] = xs
   given eq: Eq[EmailMessage] = Eq.fromUniversalEquals
 
 enum EmailStatus:

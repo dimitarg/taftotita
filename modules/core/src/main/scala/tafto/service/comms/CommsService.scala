@@ -1,5 +1,6 @@
 package tafto.service.comms
 
+import cats.Parallel
 import cats.data.NonEmptyList
 import cats.effect.*
 import cats.implicits.*
@@ -9,8 +10,8 @@ import io.odin.Logger
 import natchez.{EntryPoint, Span, Trace}
 import tafto.domain.*
 import tafto.util.Time
-import tafto.util.tracing.SpanLocal
 import tafto.util.tracing.given
+import tafto.util.tracing.{SpanLocal, span}
 
 import scala.concurrent.duration.*
 
@@ -32,7 +33,7 @@ trait CommsService[F[_]]:
       .concurrently(run)
 
 object CommsService:
-  def apply[F[_]: Temporal: Logger: Trace: EntryPoint: SpanLocal](
+  def apply[F[_]: Temporal: Parallel: Logger: Trace: EntryPoint: SpanLocal](
       emailMessageRepo: EmailMessageRepo[F],
       emailSender: EmailSender[F],
       pollingConfig: PollingConfig
@@ -44,15 +45,22 @@ object CommsService:
 
       override def run: Stream[F, Unit] =
         emailMessageRepo.listen
-          .evalMap(processMessage)
+          .flatMap(xs =>
+            Stream.evalUnChunk(
+              summon[EntryPoint[F]].root("processChunk").use { root =>
+                val result = Trace[F].put("payload.size" -> xs.size) >>
+                  xs.parTraverse(processMessage)
+                Local[F, Span[F]].scope(result)(root)
+              }
+            )
+          )
           .onFinalize {
             Logger[F].info("Exiting email consumer stream.")
           }
 
       private def processMessage(id: EmailMessage.Id): F[Unit] =
-        summon[EntryPoint[F]].root("processMessage").use { root =>
-          val result = for
-            _ <- Trace[F].put("id" -> id)
+        span("processMessage")("id" -> id) {
+          for
             _ <- Logger[F].debug(s"Processing message $id.")
             maybeMessage <- emailMessageRepo.claim(id)
             _ <- maybeMessage match
@@ -63,8 +71,6 @@ object CommsService:
               case Some(message) =>
                 processClaimedMessage(id, message)
           yield ()
-
-          Local[F, Span[F]].scope(result)(root)
         }
 
       private def processClaimedMessage(id: EmailMessage.Id, message: EmailMessage): F[Unit] =

@@ -5,7 +5,6 @@ import cats.effect.*
 import cats.implicits.*
 import fs2.Stream
 import io.github.iltotore.iron.autoRefine
-import io.github.iltotore.iron.cats.given
 import natchez.Trace
 import tafto.domain.*
 import tafto.persist.testutil.ChannelIdGenerator
@@ -40,23 +39,16 @@ object PgEmailMessageRepoTests:
         },
         test("PgEmailMessageRepo.scheduleMessages notifies on inserting messages") {
 
-          inline val testSize = 5
-
           for
             channelId <- channelGen.next
             messageRepo = PgEmailMessageRepo(db, channelId)
-            messages <- nelOfSize(testSize)(emailMessageGen).sampleIO
-            result <- TestChannelListener.make(db, channelId).use { messageStream =>
+            messages <- nelOfSize(5)(emailMessageGen).sampleIO
+            firstIdChunk = messageRepo.listen.take(1).compile.lastOrError.background
+            result <- firstIdChunk.use { handle =>
               for
                 ids <- messageRepo.scheduleMessages(messages)
-                idSet = ids.map(_.value.show).toSet
-                receivedIds <- messageStream
-                  .filter(idSet.contains)
-                  .take(testSize)
-                  .compile
-                  .toList
-              yield expect(receivedIds.size === testSize) `and`
-                expect(receivedIds.toSet === idSet)
+                broadcastedIds <- handle.flatMap(_.embedError)
+              yield expect(broadcastedIds.toList.toSet === ids.toSet)
             }
           yield result
         },
