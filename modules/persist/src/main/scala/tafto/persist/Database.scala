@@ -42,7 +42,7 @@ object Database:
         user = config.userName.value,
         password = config.password.value.value.some,
         database = config.database.value,
-        max = 10,
+        max = config.poolSize,
         strategy = Strategy.SearchPath
       )
       .map(Database(_))

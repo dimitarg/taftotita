@@ -47,6 +47,7 @@ lazy val core = module("core")
       "io.github.iltotore" %% "iron-cats" % ironVersion,
       "io.github.iltotore" %% "iron-scalacheck" % ironVersion  % "test",
       // we depend on ciris in core because domain data types reuse `Secret` datatype.
+      "io.github.iltotore" %% "iron-ciris" % ironVersion,
       "is.cir" %% "ciris" % "3.7.0",
       "com.github.cb372" %% "cats-retry" % "3.1.3",
       "dev.optics" %% "monocle-core"  % monocleVersion,

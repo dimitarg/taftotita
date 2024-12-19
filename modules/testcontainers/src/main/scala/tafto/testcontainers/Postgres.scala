@@ -5,6 +5,8 @@ import cats.effect.unsafe.implicits.global
 import cats.implicits.*
 import ciris.Secret
 import com.dimafeng.testcontainers.PostgreSQLContainer
+import io.github.iltotore.iron.:|
+import io.github.iltotore.iron.constraint.numeric.Positive
 import io.odin.*
 import org.testcontainers.containers.BindMode
 import org.testcontainers.containers.wait.strategy.LogMessageWaitStrategy
@@ -23,7 +25,12 @@ object Postgres:
 
   val imageName = DockerImageName.parse("postgres:17.1").asCompatibleSubstituteFor("postgres")
 
-  def make(dataBind: Option[ValidHostFsBind], tailLog: Boolean, reenableFsync: Boolean): Resource[IO, Postgres] =
+  def make(
+      dataBind: Option[ValidHostFsBind],
+      tailLog: Boolean,
+      reenableFsync: Boolean,
+      poolSize: Int :| Positive
+  ): Resource[IO, Postgres] =
     Resource
       .fromAutoCloseable {
         IO.blocking {
@@ -64,7 +71,7 @@ object Postgres:
           dbName <- DatabaseName.either(PostgreSQLContainer.defaultDatabaseName)
           user <- UserName.either(PostgreSQLContainer.defaultUsername)
           pass = Password(Secret(PostgreSQLContainer.defaultPassword))
-        yield DatabaseConfig(dbName, host, port, user, pass)
+        yield DatabaseConfig(dbName, host, port, user, pass, poolSize)
 
         config.asIO.map { config =>
           Postgres(container, config)

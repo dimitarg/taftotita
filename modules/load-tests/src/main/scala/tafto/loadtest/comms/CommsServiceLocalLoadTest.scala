@@ -4,8 +4,12 @@ import cats.data.{Kleisli, NonEmptyList}
 import cats.effect.std.UUIDGen
 import cats.effect.{IO, IOApp, Resource}
 import cats.implicits.*
+import ciris.*
 import io.github.iltotore.iron.*
+import io.github.iltotore.iron.ciris.given
+import io.github.iltotore.iron.constraint.numeric.Positive
 import io.odin.Logger
+import monocle.syntax.all.*
 import natchez.EntryPoint
 import natchez.mtl.given
 import natchez.noop.NoopSpan
@@ -28,13 +32,29 @@ object CommsServiceLocalLoadTest extends IOApp.Simple:
 
   val makeTestResources: Resource[TracedIO, TestResources] =
     for
-      containers <- Containers.make(ContainersConfig.loadTest).mapK(Kleisli.liftK)
+      testConfig <- Resource.eval(TestConfig.load.load[TracedIO])
+      containers <- Containers.make(ContainersConfig.loadTest(testConfig.poolSize)).mapK(Kleisli.liftK)
       config = containers.postgres.databaseConfig
       _ <- Resource.eval(DatabaseMigrator.migrate[TracedIO](config))
+
       commsDb <- Database.make[TracedIO](config)
-      testDb <- Database.make[TracedIO](config)
+      testDb <- Database.make[TracedIO](
+        config
+          .focus(_.poolSize)
+          .replace(testConfig.testPoolSize)
+      )
       testRunUUID <- Resource.eval(UUIDGen[TracedIO].randomUUID)
-      tracingGlobalFields = Map("test.uuid" -> testRunUUID.toString())
+      tracingGlobalFields = Map(
+        "test.uuid" -> testRunUUID.toString(),
+        "pool.size" -> testConfig.poolSize,
+        "test.pool.size" -> testConfig.testPoolSize
+      )
+      _ <- Resource.eval(
+        Logger[TracedIO].info(s"Test run is $testRunUUID") >>
+          Logger[TracedIO].info(
+            s"Db pool size in effect is ${testConfig.poolSize}, test pool size in effect is ${testConfig.testPoolSize}"
+          )
+      )
       commsEp <- honeycombEntryPoint[TracedIO](
         serviceName = "tafto-comms",
         globalFields = tracingGlobalFields
@@ -113,3 +133,25 @@ object CommsServiceLocalLoadTest extends IOApp.Simple:
       testDb: Database[TracedIO],
       testEntryPoint: EntryPoint[IO]
   )
+
+  final case class TestConfig(
+      poolSize: Int :| Positive,
+      testPoolSize: Int :| Positive
+  )
+
+  object TestConfig:
+
+    val load: ConfigValue[Effect, TestConfig] =
+      (
+        env("POOL_SIZE")
+          .as[Int :| Positive]
+          .default(32),
+        env("TEST_POOL_SIZE")
+          .as[Int :| Positive]
+          .default(32)
+      ).mapN { (poolSize, testPoolSize) =>
+        TestConfig(
+          poolSize = poolSize,
+          testPoolSize = testPoolSize
+        )
+      }

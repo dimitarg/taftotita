@@ -12,6 +12,7 @@ final case class DatabaseConfig(
     host: Host,
     port: Port,
     userName: UserName,
-    password: Password
+    password: Password,
+    poolSize: Int :| Positive
 ):
   def jdbcUrl: String = s"jdbc:postgresql://${host.value}:${port.value}/${database.value}"

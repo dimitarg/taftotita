@@ -46,7 +46,7 @@ package object tracing:
 
   def honeycombEntryPoint[F[_]: Async](
       serviceName: String,
-      globalFields: Map[String, String]
+      globalFields: Map[String, ?]
   ): Resource[F, EntryPoint[F]] =
     for
       config <- Resource.eval(HoneycombConfig.load(serviceName, globalFields).load[F])
