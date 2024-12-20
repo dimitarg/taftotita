@@ -14,11 +14,15 @@ import weaver.scalacheck.*
 
 object EmailMessageIdCodecsTests extends Suite with Checkers:
 
-  override def suitesStream: Stream[IO, Test] = parSuite(
+  override def suitesStream: Stream[IO, Test] = parSuite {
+
+    val maxSupportedMessages = 392
+    val expectedSizeLessThan = 8000
+
     List(
-      test("traceableMessageIdsStringCodec - encoding up to 392 messages does not exceed 8000 bytes") {
+      test(s"Encoding up to ${maxSupportedMessages} messages is less than ${expectedSizeLessThan} bytes") {
         val messageIds = List
-          .fill(n = 392)(elem = Long.MaxValue)
+          .fill(n = maxSupportedMessages)(elem = Long.MaxValue)
           .map(x => EmailMessage.Id.apply(x))
 
         val gen = traceableMessageGen(Gen.const(messageIds))
@@ -27,17 +31,16 @@ object EmailMessageIdCodecsTests extends Suite with Checkers:
           val encoded = codec.encoder.encode(message)
           val encodedBytes = encoded.getBytes()
 
-          expect(encodedBytes.length < 8000)
+          expect(encodedBytes.length < expectedSizeLessThan)
         }
       },
-      test("traceableMessageIdsStringCodec - roundtrip") {
+      test("Roundtrip") {
         val gen = traceableMessageGen(Gen.listOf(emailIdGen))
         forall(gen) { message =>
           codec.decoder.decode(codec.encoder.encode(message)).orThrow[IO].map { decoded =>
-            expect(message.kernel === decoded.kernel) `and`
-              expect(message.payload === decoded.payload.toList)
+            expect(decoded.map(_.toList) === message)
           }
         }
       }
     )
-  )
+  }
