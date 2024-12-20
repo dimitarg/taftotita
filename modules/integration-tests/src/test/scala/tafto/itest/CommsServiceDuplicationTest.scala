@@ -10,6 +10,7 @@ import io.odin.Logger
 import natchez.{EntryPoint, Span, Trace}
 import tafto.domain.*
 import tafto.itest.util.*
+import tafto.json.JsonStringCodecs.traceableMessageIdsStringCodec as channelCodec
 import tafto.persist.*
 import tafto.persist.testutil.ChannelIdGenerator
 import tafto.service.comms.CommsService
@@ -51,7 +52,7 @@ object CommsServiceDuplicationTest:
             chanId <- channelGen.next
             emailSender <- RefBackedEmailSender.make[IO]
 
-            emailMessageRepo = PgEmailMessageRepo(db, chanId)
+            emailMessageRepo = PgEmailMessageRepo(db, chanId, channelCodec)
             commsService = CommsService(emailMessageRepo, emailSender, PollingConfig.default)
 
             commsServiceConsumerInstances = Stream

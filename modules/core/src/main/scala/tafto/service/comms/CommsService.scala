@@ -45,7 +45,8 @@ object CommsService:
 
       override def run: Stream[F, Unit] =
         emailMessageRepo.listen
-          .flatMap(xs =>
+          .flatMap(msg =>
+            val xs = msg.payload
             Stream.evalUnChunk {
               summon[EntryPoint[F]].root("processChunk").use { root =>
                 val result = Trace[F].put("payload.size" -> xs.size) >>

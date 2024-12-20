@@ -13,6 +13,7 @@ import monocle.syntax.all.*
 import natchez.{EntryPoint, Span, Trace}
 import tafto.domain.*
 import tafto.itest.util.*
+import tafto.json.JsonStringCodecs.traceableMessageIdsStringCodec as channelCodec
 import tafto.persist.*
 import tafto.persist.testutil.ChannelIdGenerator
 import tafto.service.comms.CommsService.PollingConfig
@@ -41,7 +42,7 @@ object CommsServiceTest:
             chanId <- channelGen.next
             emailSender <- RefBackedEmailSender.make[IO]
 
-            emailMessageRepo = PgEmailMessageRepo(db, chanId)
+            emailMessageRepo = PgEmailMessageRepo(db, chanId, channelCodec)
             commsService = CommsService(emailMessageRepo, emailSender, PollingConfig.default)
 
             result <- commsService.run.take(1).compile.drain.background.use { awaitFinished =>
@@ -62,7 +63,7 @@ object CommsServiceTest:
             (_: EmailMessage.Id, _: EmailMessage) => IO.raiseError(new RuntimeException("Failed I have."))
           for
             chanId <- channelGen.next
-            emailMessageRepo = PgEmailMessageRepo(db, chanId)
+            emailMessageRepo = PgEmailMessageRepo(db, chanId, channelCodec)
             commsService = CommsService(emailMessageRepo, emailSender, PollingConfig.default)
 
             result <- commsService.run.take(1).compile.drain.background.use { awaitFinished =>
@@ -81,7 +82,7 @@ object CommsServiceTest:
             tempChanId <- channelGen.next
             emailSender <- RefBackedEmailSender.make[IO]
             msgs <- nelOfSize(10)(emailMessageGen).sampleIO
-            tempEmailMessageRepo = PgEmailMessageRepo(db, tempChanId)
+            tempEmailMessageRepo = PgEmailMessageRepo(db, tempChanId, channelCodec)
             ids <- tempEmailMessageRepo.scheduleMessages(msgs)
             longAgo = OffsetDateTime.ofInstant(Instant.ofEpochMilli(42), ZoneOffset.UTC)
             _ <- db.transact { s =>
@@ -90,7 +91,7 @@ object CommsServiceTest:
                 s.execute(TestQueries.updateMessageTimestamps)((longAgo, None, id))
               }
             }
-            emailMessageRepo = PgEmailMessageRepo(db, chanId)
+            emailMessageRepo = PgEmailMessageRepo(db, chanId, channelCodec)
             commsService = CommsService(emailMessageRepo, emailSender, PollingConfig.default)
 
             result <- commsService.run.take(10).compile.drain.background.use { awaitFinished =>
@@ -111,7 +112,7 @@ object CommsServiceTest:
             chanId <- channelGen.next
             emailSender <- RefBackedEmailSender.make[IO]
             msgs <- nelOfSize(4)(emailMessageGen).sampleIO
-            tempEmailMessageRepo = PgEmailMessageRepo(db, chanId)
+            tempEmailMessageRepo = PgEmailMessageRepo(db, chanId, channelCodec)
             ids <- tempEmailMessageRepo.scheduleMessages(msgs)
 
             (id1, id2, id3, id4) <- safeMatch(ids) { case w :: x :: y :: z :: Nil =>
@@ -135,7 +136,7 @@ object CommsServiceTest:
               yield ()
             }
 
-            emailMessageRepo = PgEmailMessageRepo(db, chanId)
+            emailMessageRepo = PgEmailMessageRepo(db, chanId, channelCodec)
             pollingConfig = PollingConfig.default
               .focus(_.forClaimed.timeToLive)
               .replace(1.hour)
@@ -158,10 +159,10 @@ object CommsServiceTest:
             tempChanId <- channelGen.next
             emailSender <- RefBackedEmailSender.make[IO]
             msgs <- nelOfSize(10)(emailMessageGen).sampleIO
-            tempEmailMessageRepo = PgEmailMessageRepo(db, tempChanId)
+            tempEmailMessageRepo = PgEmailMessageRepo(db, tempChanId, channelCodec)
             backfillIds <- tempEmailMessageRepo.scheduleMessages(msgs)
 
-            emailMessageRepo = PgEmailMessageRepo(db, chanId)
+            emailMessageRepo = PgEmailMessageRepo(db, chanId, channelCodec)
             commsService = CommsService(emailMessageRepo, emailSender, PollingConfig.default)
 
             result <- commsService.backfillAndRun.compile.drain.background.use { consumerHandle =>
@@ -177,7 +178,7 @@ object CommsServiceTest:
           for
             chanId <- channelGen.next
             emailSender <- FlakyEmailSender.make[IO](timesToFail = 2)
-            emailMessageRepo = PgEmailMessageRepo(db, chanId)
+            emailMessageRepo = PgEmailMessageRepo(db, chanId, channelCodec)
             retryPolicy = Retry.fullJitter[IO](maxRetries = 3, baseDelay = 2.millis)
             commsService = CommsService(
               emailMessageRepo,

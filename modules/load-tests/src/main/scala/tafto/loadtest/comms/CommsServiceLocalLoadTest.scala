@@ -15,6 +15,7 @@ import natchez.mtl.given
 import natchez.noop.NoopSpan
 import tafto.db.DatabaseMigrator
 import tafto.domain.*
+import tafto.json.JsonStringCodecs.traceableMessageIdsStringCodec as channelCodec
 import tafto.log.defaultLogger
 import tafto.persist.*
 import tafto.service.comms.CommsService
@@ -65,12 +66,12 @@ object CommsServiceLocalLoadTest extends IOApp.Simple:
 
       commsService =
         given EntryPoint[TracedIO] = commsEp
-        val emailRepo = PgEmailMessageRepo(commsDb, channelId)
+        val emailRepo = PgEmailMessageRepo(commsDb, channelId, channelCodec)
         CommsService(emailRepo, new NoOpEmailSender[TracedIO], PollingConfig.default)
 
       testCommsService =
         given EntryPoint[TracedIO] = testEp.mapK(Kleisli.liftK)
-        val testEmailRepo = PgEmailMessageRepo(testDb, channelId)
+        val testEmailRepo = PgEmailMessageRepo(testDb, channelId, channelCodec)
         CommsService(testEmailRepo, new NoOpEmailSender[TracedIO], PollingConfig.default)
     yield TestResources(
       commsService = commsService,

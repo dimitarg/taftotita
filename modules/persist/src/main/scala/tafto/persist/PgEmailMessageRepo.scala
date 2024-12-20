@@ -14,7 +14,6 @@ import skunk.implicits.*
 import tafto.domain.*
 import tafto.domain.EmailMessage.Id
 import tafto.persist.codecs.*
-import tafto.persist.codecs.channel.{ChannelDecoder, ChannelEncoder}
 import tafto.persist.unsafe.*
 import tafto.service.comms.EmailMessageRepo
 import tafto.util.*
@@ -24,7 +23,11 @@ import java.time.OffsetDateTime
 
 final case class PgEmailMessageRepo[F[_]: Time: MonadCancelThrow: Trace](
     database: Database[F],
-    channelId: Identifier
+    channelId: Identifier,
+    channelCodec: StringCodec[
+      TraceableMessage[List[EmailMessage.Id]],
+      TraceableMessage[Chunk[EmailMessage.Id]]
+    ]
 ) extends EmailMessageRepo[F]:
   override def scheduleMessages(messages: NonEmptyList[EmailMessage]): F[List[EmailMessage.Id]] =
     span("scheduleMessages")("payload.size" -> messages.size) {
@@ -47,7 +50,14 @@ final case class PgEmailMessageRepo[F[_]: Time: MonadCancelThrow: Trace](
   private def notify(s: Session[F], ids: List[EmailMessage.Id]): F[Unit] =
     span("notify")("payload.size" -> ids.size) {
       val channel = s.channel(channelId)
-      ids.grouped(notifyBatchSize).toList.traverse_(xs => channel.notify(ChannelEncoder.emailMessageIds.encode(xs)))
+      ids.grouped(notifyBatchSize).toList.traverse_ { xs =>
+        for
+          message <- TraceableMessage.make(xs)
+          _ <- channel.notify(
+            channelCodec.encoder.encode(message)
+          )
+        yield ()
+      }
     }
 
   override def getMessage(id: EmailMessage.Id): F[Option[(EmailMessage, EmailStatus)]] =
@@ -120,14 +130,12 @@ final case class PgEmailMessageRepo[F[_]: Time: MonadCancelThrow: Trace](
     case Completion.Update(count) if count > 0 => true
     case _                                     => false
 
-  override val listen: Stream[F, Chunk[EmailMessage.Id]] =
+  override val listen: Stream[F, TraceableMessage[Chunk[EmailMessage.Id]]] =
     database
       .subscribeToChannel(channelId)
       .evalMap { notification =>
         val payload = notification.value
-        ChannelDecoder.emailMessageIds
-          .decode(payload)
-          .orThrow[F]
+        channelCodec.decoder.decode(payload).orThrow[F]
       }
 
   override def notify(messages: List[EmailMessage.Id]): F[Unit] = database.pool.use { s =>

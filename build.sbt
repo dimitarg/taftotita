@@ -8,6 +8,7 @@ val http4sVersion = "0.23.30"
 val tapirVersion = "1.11.10"
 val monocleVersion = "3.3.0"
 val natchezVersion = "0.3.5"
+val circeVersion = "0.14.10"
 
 def module(name: String): Project = Project(id = s"tafto-${name}",  base = file(s"modules/$name"))
   .settings(
@@ -127,20 +128,28 @@ lazy val localDev = module("local-dev")
   .dependsOn(migrations, persist, restServer, crypto, testContainers)
 
 lazy val integrationTests = module("integration-tests")
-  .dependsOn(migrations, persist % "compile->compile;test->test", restServer, crypto, testContainers)
+  .dependsOn(migrations, persist % "compile->compile;test->test", restServer, crypto, testContainers, json)
 
 lazy val loadTests = module("load-tests")
-  .dependsOn(migrations, persist, testContainers)
+  .dependsOn(migrations, persist, testContainers, json)
   .settings(
     javaOptions ++= Seq(
       "-Xms8g"
     )
   )
 
+lazy val json = module("json")
+  .dependsOn(core)
+  .settings(libraryDependencies ++= Seq(
+    "io.circe" %% "circe-core" % circeVersion,
+    "io.circe" %% "circe-parser" % circeVersion,
+    "io.github.iltotore" %% "iron-circe" % ironVersion,
+  ))
+
 // make sure any test projects spinning up docker containers run in sequence, so resource usage stays sane.
 (integrationTests / test) := ((integrationTests / Test / test) dependsOn (persist / Test / test)).value
 
 
 lazy val root = (project in file("."))
-  .aggregate(logging, core, migrations, config, persist, testContainers, restApi, restServer, localDev, crypto, integrationTests, loadTests)
+  .aggregate(logging, core, migrations, config, persist, testContainers, restApi, restServer, localDev, crypto, integrationTests, loadTests, json)
 
