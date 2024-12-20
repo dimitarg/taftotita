@@ -37,7 +37,8 @@ final case class PgEmailMessageRepo[F[_]: Time: MonadCancelThrow: Trace](
           result <- Database.batched(s)(EmailMessageQueries.insertMessages)(messages.map { x =>
             (x, EmailStatus.Scheduled, now)
           })
-          _ <- notify(s, result)
+          k <- Trace[F].kernel
+          _ <- notify(s, result, k)
         yield result
       }
     }
@@ -47,16 +48,14 @@ final case class PgEmailMessageRepo[F[_]: Time: MonadCancelThrow: Trace](
   // this means we must send less than 400 messages. 350 leaves some leeway but this can be increased to 399.
   private val notifyBatchSize = 350
 
-  private def notify(s: Session[F], ids: List[EmailMessage.Id]): F[Unit] =
+  private def notify(s: Session[F], ids: List[EmailMessage.Id], k: Kernel): F[Unit] =
     span("notify")("payload.size" -> ids.size) {
       val channel = s.channel(channelId)
       ids.grouped(notifyBatchSize).toList.traverse_ { xs =>
-        for
-          message <- TraceableMessage.make(xs)
-          _ <- channel.notify(
-            channelCodec.encoder.encode(message)
-          )
-        yield ()
+        val message = TraceableMessage(k.toHeaders, xs)
+        channel.notify(
+          channelCodec.encoder.encode(message)
+        )
       }
     }
 
@@ -139,7 +138,10 @@ final case class PgEmailMessageRepo[F[_]: Time: MonadCancelThrow: Trace](
       }
 
   override def notify(messages: List[EmailMessage.Id]): F[Unit] = database.pool.use { s =>
-    notify(s, messages)
+    for
+      k <- Trace[F].kernel
+      _ <- notify(s, messages, k)
+    yield ()
   }
 
 object EmailMessageQueries:

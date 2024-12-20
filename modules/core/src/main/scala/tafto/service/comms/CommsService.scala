@@ -7,7 +7,7 @@ import cats.implicits.*
 import cats.mtl.Local
 import fs2.Stream
 import io.odin.Logger
-import natchez.{EntryPoint, Span, Trace}
+import natchez.{EntryPoint, Kernel, Span, Trace}
 import tafto.domain.*
 import tafto.util.Time
 import tafto.util.tracing.given
@@ -48,7 +48,7 @@ object CommsService:
           .flatMap(msg =>
             val xs = msg.payload
             Stream.evalUnChunk {
-              summon[EntryPoint[F]].root("processChunk").use { root =>
+              summon[EntryPoint[F]].continueOrElseRoot("processChunk", Kernel(msg.kernel)).use { root =>
                 val result = Trace[F].put("payload.size" -> xs.size) >>
                   xs.parTraverse(processMessage)
                 Local[F, Span[F]].scope(result)(root)
