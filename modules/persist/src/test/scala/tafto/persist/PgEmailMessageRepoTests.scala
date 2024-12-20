@@ -7,7 +7,7 @@ import fs2.Stream
 import io.github.iltotore.iron.autoRefine
 import natchez.Trace
 import tafto.domain.*
-import tafto.persist.testutil.{ChannelCodecs, ChannelIdGenerator}
+import tafto.persist.testutil.{ChannelCodecs as codecs, ChannelIdGenerator}
 import tafto.service.comms.EmailMessageRepo
 import tafto.testutil.Generators.*
 import tafto.util.*
@@ -18,13 +18,14 @@ object PgEmailMessageRepoTests:
   def tests(db: Database[IO], channelGen: ChannelIdGenerator[IO])(using
       trace: Trace[IO]
   ): Stream[IO, Test] =
+    val channelCodec = codecs.simple
     parSuite(
       List(
         test("PgEmailMessageRepo.scheduleMessages can insert a single message") {
           for
             msg <- emailMessageGen.sampleIO
             channelId <- channelGen.next
-            messageRepo = PgEmailMessageRepo(db, channelId, ChannelCodecs.simple)
+            messageRepo = PgEmailMessageRepo(db, channelId, channelCodec)
             id <- insertMessage(messageRepo)(msg)
             messageFromDb <- messageRepo.getMessage(id)
           yield expect(messageFromDb === (msg, EmailStatus.Scheduled).some)
@@ -33,7 +34,7 @@ object PgEmailMessageRepoTests:
           for
             messages <- nelOfSize(10000)(emailMessageGen).sampleIO
             channelId <- channelGen.next
-            messageRepo = PgEmailMessageRepo(db, channelId, ChannelCodecs.simple)
+            messageRepo = PgEmailMessageRepo(db, channelId, channelCodec)
             ids <- messageRepo.scheduleMessages(messages)
           yield expect(ids.size === messages.size)
         },
@@ -41,7 +42,7 @@ object PgEmailMessageRepoTests:
 
           for
             channelId <- channelGen.next
-            messageRepo = PgEmailMessageRepo(db, channelId, ChannelCodecs.simple)
+            messageRepo = PgEmailMessageRepo(db, channelId, channelCodec)
             messages <- nelOfSize(5)(emailMessageGen).sampleIO
             firstIdChunk = messageRepo.listen.take(1).compile.lastOrError.background
             result <- firstIdChunk.use { handle =>
@@ -56,7 +57,7 @@ object PgEmailMessageRepoTests:
         test("PgEmailMessageRepo.claim can claim a message") {
           for
             channelId <- channelGen.next
-            messageRepo = PgEmailMessageRepo(db, channelId, ChannelCodecs.simple)
+            messageRepo = PgEmailMessageRepo(db, channelId, channelCodec)
             testMessage <- emailMessageGen.sampleIO
             id <- insertMessage(messageRepo)(testMessage)
             claimed <- messageRepo.claim(id)
@@ -68,7 +69,7 @@ object PgEmailMessageRepoTests:
         test("PgEmailMessageRepo.claim cannot claim a message once it's claimed") {
           for
             channelId <- channelGen.next
-            messageRepo = PgEmailMessageRepo(db, channelId, ChannelCodecs.simple)
+            messageRepo = PgEmailMessageRepo(db, channelId, channelCodec)
             testMessage <- emailMessageGen.sampleIO
             id <- insertMessage(messageRepo)(testMessage)
             _ <- messageRepo.claim(id)
@@ -81,7 +82,7 @@ object PgEmailMessageRepoTests:
         test("PgEmailMessageRepo.markAsSent can mark a message that was claimed") {
           for
             channelId <- channelGen.next
-            messageRepo = PgEmailMessageRepo(db, channelId, ChannelCodecs.simple)
+            messageRepo = PgEmailMessageRepo(db, channelId, channelCodec)
             testMessage <- emailMessageGen.sampleIO
             id <- insertMessage(messageRepo)(testMessage)
             _ <- messageRepo.claim(id)
@@ -92,7 +93,7 @@ object PgEmailMessageRepoTests:
         test("PgEmailMessageRepo.markAsSent cannot mark a message that is only scheduled") {
           for
             channelId <- channelGen.next
-            messageRepo = PgEmailMessageRepo(db, channelId, ChannelCodecs.simple)
+            messageRepo = PgEmailMessageRepo(db, channelId, channelCodec)
             testMessage <- emailMessageGen.sampleIO
             id <- insertMessage(messageRepo)(testMessage)
             marked <- messageRepo.markAsSent(id)
@@ -102,7 +103,7 @@ object PgEmailMessageRepoTests:
         test("PgEmailMessageRepo.getScheduledIds works correctly") {
           for
             channelId <- channelGen.next
-            messageRepo = PgEmailMessageRepo(db, channelId, ChannelCodecs.simple)
+            messageRepo = PgEmailMessageRepo(db, channelId, channelCodec)
             msgs <- nelOfSize(10)(emailMessageGen).sampleIO
             insertedIds <- messageRepo.scheduleMessages(msgs)
             now <- Time[IO].utc
