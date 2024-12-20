@@ -1,7 +1,7 @@
 package tafto.util
 
-import cats.Functor
 import cats.implicits.*
+import cats.{Functor, Show}
 import natchez.Trace
 import org.typelevel.ci.CIString
 
@@ -15,3 +15,7 @@ object TraceableMessage:
     Trace[F].kernel.map { kernel =>
       TraceableMessage(kernel.toHeaders, payload)
     }
+
+  given show[A: Show]: Show[TraceableMessage[A]] = Show.show { x =>
+    show"TraceableMessage(kernel: ${x.kernel}, payload: ${x.payload})"
+  }

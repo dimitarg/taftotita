@@ -5,8 +5,9 @@ import cats.effect.*
 import io.github.iltotore.iron.*
 import io.github.iltotore.iron.constraint.numeric.Positive
 import org.scalacheck.Gen
+import org.typelevel.ci.*
 import tafto.domain.{Email, EmailMessage}
-import tafto.util.NonEmpty
+import tafto.util.{NonEmpty, TraceableMessage}
 
 object Generators:
 
@@ -45,6 +46,25 @@ object Generators:
           Gen.const(nel)
         }
     }
+
+  val emailIdGen: Gen[EmailMessage.Id] =
+    Gen.long.map(x => EmailMessage.Id.apply(x))
+
+  private val traceIdHeader = ci"X-Natchez-Trace-Id"
+  private val spanIdHeader = ci"X-Natchez-Parent-Span-Id"
+
+  val kernelGen: Gen[Map[CIString, String]] = for
+    traceId <- Gen.uuid
+    spanId <- Gen.uuid
+  yield Map(
+    traceIdHeader -> traceId.toString(),
+    spanIdHeader -> spanId.toString()
+  )
+
+  def traceableMessageGen[A](payloadGen: Gen[A]): Gen[TraceableMessage[A]] = for
+    kernel <- kernelGen
+    payload <- payloadGen
+  yield TraceableMessage(kernel, payload)
 
   extension [A](gen: Gen[A])
     def sampleF[F[_]: Sync]: F[A] = Sync[F].blocking(gen.sample.get)

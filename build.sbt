@@ -14,7 +14,8 @@ def module(name: String): Project = Project(id = s"tafto-${name}",  base = file(
   .settings(
     libraryDependencies ++= Seq(
       "io.github.dimitarg"  %%  "weaver-test-extra" % "0.5.11" % "test",
-      "org.scalacheck" %% "scalacheck" % "1.18.1",
+      "org.scalacheck" %% "scalacheck" % "1.18.1"  % "test",
+      "com.disneystreaming" %% "weaver-scalacheck" % "0.8.4" % "test",
     )
   )
   .settings(
@@ -139,7 +140,7 @@ lazy val loadTests = module("load-tests")
   )
 
 lazy val json = module("json")
-  .dependsOn(core)
+  .dependsOn(core % "compile->compile;test->test")
   .settings(libraryDependencies ++= Seq(
     "io.circe" %% "circe-core" % circeVersion,
     "io.circe" %% "circe-parser" % circeVersion,
