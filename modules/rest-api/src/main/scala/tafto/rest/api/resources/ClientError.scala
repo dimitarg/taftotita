@@ -1,7 +1,6 @@
 package tafto.rest.api.resources
 
 import io.circe.Codec
-import io.circe.generic.semiauto.*
 import sttp.tapir.Schema
 
 sealed trait ClientError

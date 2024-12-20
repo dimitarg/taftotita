@@ -46,13 +46,13 @@ object CommsService:
       override def run: Stream[F, Unit] =
         emailMessageRepo.listen
           .flatMap(xs =>
-            Stream.evalUnChunk(
+            Stream.evalUnChunk {
               summon[EntryPoint[F]].root("processChunk").use { root =>
                 val result = Trace[F].put("payload.size" -> xs.size) >>
                   xs.parTraverse(processMessage)
                 Local[F, Span[F]].scope(result)(root)
               }
-            )
+            }
           )
           .onFinalize {
             Logger[F].info("Exiting email consumer stream.")
