@@ -59,51 +59,43 @@ object CommsService:
               }
             }
           )
+          .evalMap(traceAndLog)
           .onFinalize {
             Logger[F].info("Exiting email consumer stream.")
           }
 
-      private def processMessage(id: EmailMessage.Id): F[Unit] =
+      private def processMessage(id: EmailMessage.Id): F[MessageProcessingResult] =
         span("processMessage")("id" -> id) {
           for
             _ <- Logger[F].debug(s"Processing message $id.")
             maybeMessage <- emailMessageRepo.claim(id)
-            _ <- maybeMessage match
+            result <- maybeMessage match
               case None =>
-                Logger[F].debug(
-                  s"Could not claim message $id for sending as it was already claimed by another process, or does not exist."
-                )
+                MessageProcessingResult.CouldNotClaim(id).pure[F]
               case Some(message) =>
                 processClaimedMessage(id, message)
-          yield ()
+          yield result
         }
 
-      private def processClaimedMessage(id: EmailMessage.Id, message: EmailMessage): F[Unit] =
+      private def processClaimedMessage(id: EmailMessage.Id, message: EmailMessage): F[MessageProcessingResult] =
         for
           sendEmailResult <- emailSender.sendEmail(id, message).attempt
-          _ <- sendEmailResult.fold(markAsError(id, _), _ => markAsSent(id))
-        yield ()
+          result <- sendEmailResult.fold(markAsError(id, _), _ => markAsSent(id))
+        yield result
 
-      private def markAsSent(id: EmailMessage.Id): F[Unit] =
+      private def markAsSent(id: EmailMessage.Id): F[MessageProcessingResult] =
         emailMessageRepo
           .markAsSent(id)
-          .flatTap {
-            case true => ().pure[F]
-            case false =>
-              Logger[F].error(
-                s"Duplicate delivery detected. Email message $id sent but already marked as sent by another process."
-              )
+          .map {
+            case true  => MessageProcessingResult.Marked(id, error = None)
+            case false => MessageProcessingResult.CouldNotMark(id, error = None)
           }
-          .void
 
-      private def markAsError(id: EmailMessage.Id, error: Throwable): F[Unit] =
-        for
-          _ <- Logger[F].error(s"Error when sending message ${id}", error)
-          wasMarked <- emailMessageRepo.markAsError(id, error.getMessage())
-          _ <-
-            if wasMarked then ().pure[F]
-            else Logger[F].warn(s"Could not mark message $id as error, was it rescheduled in the meantime?")
-        yield ()
+      private def markAsError(id: EmailMessage.Id, error: Throwable): F[MessageProcessingResult] =
+        emailMessageRepo.markAsError(id, error.getMessage()).map {
+          case true  => MessageProcessingResult.Marked(id, error = error.some)
+          case false => MessageProcessingResult.CouldNotMark(id, error = error.some)
+        }
 
       override val pollForScheduledMessages: Stream[F, Unit] =
         Stream.fixedRateStartImmediately(pollingConfig.forScheduled.pollingInterval).evalMap { _ =>
@@ -120,22 +112,52 @@ object CommsService:
           for
             now <- Time[F].utc
             claimedIds <- emailMessageRepo.getClaimedIds(now.minusNanos(pollingConfig.forClaimed.timeToLive.toNanos))
-            _ <- claimedIds.traverse(reprocessClaimedMessage)
+            _ <- claimedIds.traverse_(reprocessClaimedMessage >=> traceAndLog)
           yield ()
         }
 
-      private def reprocessClaimedMessage(id: EmailMessage.Id): F[Unit] = for
-        msg <- emailMessageRepo.getMessage(id)
-        result <- msg.fold {
-          Logger[F].warn(s"Could not reprocess claimed message with id $id as it was not found")
-        } { case (message, status) =>
-          if status === EmailStatus.Claimed then processClaimedMessage(id, message)
-          else
-            Logger[F].debug(
-              s"Will not reprocess message with id $id as it's no longer claimed, current status is $status"
-            )
+      private def reprocessClaimedMessage(id: EmailMessage.Id): F[MessageProcessingResult] =
+        summon[EntryPoint[F]].root("processChunk").use { root =>
+          val result = for
+            msg <- emailMessageRepo.getMessage(id)
+            result <- msg.fold {
+              MessageProcessingResult.CannotReprocess_NotFound(id).pure[F]
+            } { case (message, status) =>
+              if status === EmailStatus.Claimed then processClaimedMessage(id, message)
+              else MessageProcessingResult.CannotReprocess_NoLongerClaimed(id, status).pure[F]
+            }
+          yield result
+          Local[F, Span[F]].scope(result)(root)
         }
-      yield result
+
+      private def traceAndLog(x: MessageProcessingResult): F[Unit] = for
+        _ <- Trace[F].put("id" -> x.id)
+        _ <- x match
+          case MessageProcessingResult.CouldNotClaim(id) =>
+            Trace[F].put("processing.result.type" -> "CouldNotClaim") >>
+              Logger[F].debug(s"Could not claim message $id, it may have been claimed by another process.")
+          case MessageProcessingResult.Marked(id, maybeError) =>
+            Trace[F].put("processing.result.type" -> "Marked") >>
+              maybeError.traverse_(traceAndLogEmailError(id, _))
+          case MessageProcessingResult.CouldNotMark(id, maybeError) =>
+            Trace[F].put("processing.result.type" -> "CouldNotMark") >>
+              maybeError.traverse_(traceAndLogEmailError(id, _)) >>
+              Logger[F].warn(s"Could not mark message $id as processed, possible duplicate delivery detected!")
+          case MessageProcessingResult.CannotReprocess_NotFound(id) =>
+            Trace[F].put("processing.result.type" -> "CannotReprocess_NotFound") >>
+              Logger[F].error(s"Message $id due to be reprocessed was not found!")
+          case MessageProcessingResult.CannotReprocess_NoLongerClaimed(id, newStatus) =>
+            Trace[F].put("processing.result.type" -> "CannotReprocess_NotFound") >>
+              Trace[F].put("processing.result.newStatus" -> newStatus.toString()) >>
+              Logger[F].debug(
+                s"Message $id due to be reprocessed is no longer claimed, new status is $newStatus, skipping."
+              )
+      yield ()
+
+      private def traceAndLogEmailError(id: EmailMessage.Id, error: Throwable): F[Unit] = for
+        _ <- Logger[F].warn(s"Error sending email $id", error)
+        _ <- Trace[F].put("email.error" -> error.getMessage())
+      yield ()
 
   final case class PollingConfig(
       forScheduled: ScheduledMessagesPollingConfig,

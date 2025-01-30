@@ -116,7 +116,7 @@ object CommsServiceLocalLoadTest extends IOApp.Simple:
       val warmups = List(
         warmup(testResources.commsDb, "comms service database pool"),
         warmup(testResources.testDb, "test database pool")
-      ).parSequence
+      ).parSequence_
 
       val test = testResources.commsService.backfillAndRun.compile.drain.run(NoopSpan()).background.use { handle =>
         for
