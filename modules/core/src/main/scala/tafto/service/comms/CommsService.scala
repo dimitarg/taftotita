@@ -7,7 +7,7 @@ import cats.implicits.*
 import cats.mtl.Local
 import fs2.Stream
 import io.odin.Logger
-import natchez.{EntryPoint, Kernel, Span, Trace}
+import natchez.{EntryPoint, Span, Trace}
 import tafto.domain.*
 import tafto.util.Time
 import tafto.util.tracing.given
@@ -48,7 +48,11 @@ object CommsService:
           .flatMap(msg =>
             val xs = msg.payload
             Stream.evalUnChunk {
-              summon[EntryPoint[F]].continueOrElseRoot("processChunk", Kernel(msg.kernel)).use { root =>
+              // summon[EntryPoint[F]].continueOrElseRoot("processChunk", Kernel(msg.kernel)).use { root =>
+              // continuing the producer span in the consumer creates traces that are unusably large in the honeycomb UI
+              // TODO upgrade skunk to use otel4s
+              // TODO experiment with creating a span link instead
+              summon[EntryPoint[F]].root("processChunk").use { root =>
                 val result = Trace[F].put("payload.size" -> xs.size) >>
                   xs.parTraverse(processMessage)
                 Local[F, Span[F]].scope(result)(root)

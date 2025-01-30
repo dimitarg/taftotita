@@ -28,6 +28,9 @@ import tafto.util.tracing.*
 
 object CommsServiceLocalLoadTest extends IOApp.Simple:
 
+  val warmupSize = 500
+  val testSize = 5000
+
   given logger: Logger[TracedIO] = defaultLogger
   given ioLogger: Logger[IO] = defaultLogger
 
@@ -81,7 +84,7 @@ object CommsServiceLocalLoadTest extends IOApp.Simple:
       testEntryPoint = testEp
     )
 
-  def publishTestMessages(testResources: TestResources, testSize: Int): IO[Unit] =
+  def publishTestMessages(testResources: TestResources): IO[Unit] =
     val msg = EmailMessage(
       subject = Some("Hello there"),
       to = List(Email("foo@example.com")),
@@ -99,7 +102,7 @@ object CommsServiceLocalLoadTest extends IOApp.Simple:
 
   def warmup(db: Database[TracedIO], name: String): IO[Unit] =
     val healthService = PgHealthService(db)
-    val result = (1 to 50).toList.parTraverse_(_ => healthService.getHealth)
+    val result = (1 to warmupSize).toList.parTraverse_(_ => healthService.getHealth)
 
     for
       _ <- Logger[IO].info(s"Warming up $name")
@@ -118,7 +121,7 @@ object CommsServiceLocalLoadTest extends IOApp.Simple:
       val test = testResources.commsService.backfillAndRun.compile.drain.run(NoopSpan()).background.use { handle =>
         for
           _ <- Logger[IO].info("publishing test messages ...")
-          _ <- publishTestMessages(testResources, testSize = 5000)
+          _ <- publishTestMessages(testResources)
           _ <- Logger[IO].info("published test messages.")
           _ <- handle.flatMap(_.embedError)
         yield ()
