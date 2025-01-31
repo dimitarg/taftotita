@@ -29,7 +29,7 @@ final case class PgEmailMessageRepo[F[_]: Time: MonadCancelThrow: Trace](
       TraceableMessage[NonEmptyList[EmailMessage.Id]]
     ]
 ) extends EmailMessageRepo[F]:
-  override def scheduleMessages(messages: NonEmptyList[EmailMessage]): F[List[EmailMessage.Id]] =
+  override def scheduleMessages(messages: NonEmptyList[EmailMessage]): F[NonEmptyList[EmailMessage.Id]] =
     span("scheduleMessages")("payload.size" -> messages.size) {
       database.transact { s =>
         for
@@ -37,9 +37,12 @@ final case class PgEmailMessageRepo[F[_]: Time: MonadCancelThrow: Trace](
           result <- Database.batched(s)(EmailMessageQueries.insertMessages)(messages.map { x =>
             (x, EmailStatus.Scheduled, now)
           })
+          nelResult <- result
+            .toNel("Unexpected: scheduleMessages for a non-empty list returned an empty result.")
+            .orThrow[F]
           k <- Trace[F].kernel
-          _ <- notify(s, result, k)
-        yield result
+          _ <- notify(s, nelResult, k)
+        yield nelResult
       }
     }
 
@@ -48,14 +51,12 @@ final case class PgEmailMessageRepo[F[_]: Time: MonadCancelThrow: Trace](
   // this means we must send less than 400 messages. 350 leaves some leeway but this can be increased to 399.
   private val notifyBatchSize = 350
 
-  private def notify(s: Session[F], ids: List[EmailMessage.Id], k: Kernel): F[Unit] =
+  private def notify(s: Session[F], ids: NonEmptyList[EmailMessage.Id], k: Kernel): F[Unit] =
     span("notify")("payload.size" -> ids.size) {
       val channel = s.channel(channelId)
       ids.grouped(notifyBatchSize).toList.traverse_ { xs =>
-        NonEmptyList.fromList(xs).traverse_ { nel =>
-          val message = TraceableMessage(k.toHeaders, nel)
-          channel.notify(channelCodec.encoder.encode(message))
-        }
+        val message = TraceableMessage(k.toHeaders, xs)
+        channel.notify(channelCodec.encoder.encode(message))
       }
     }
 
@@ -79,7 +80,7 @@ final case class PgEmailMessageRepo[F[_]: Time: MonadCancelThrow: Trace](
     }
   }
 
-  override def claim(ids: List[EmailMessage.Id]): F[List[(EmailMessage.Id, EmailMessage)]] =
+  override def claim(ids: NonEmptyList[EmailMessage.Id]): F[List[(EmailMessage.Id, EmailMessage)]] =
     span("claim")("payload.size" -> ids.size) {
       Time[F].utc.flatMap { now =>
         val updateStatus = UpdateStatus.claim(now)
@@ -87,7 +88,7 @@ final case class PgEmailMessageRepo[F[_]: Time: MonadCancelThrow: Trace](
           val inputBatches = ids.grouped(Database.batchSize).toList
           inputBatches
             .traverse { xs =>
-              s.execute(EmailMessageQueries.updateStatusesReturning(xs.size))(xs, updateStatus)
+              s.execute(EmailMessageQueries.updateStatusesReturning(xs.size))(xs.toList, updateStatus)
             }
             .map(_.flatten)
         }
@@ -137,7 +138,7 @@ final case class PgEmailMessageRepo[F[_]: Time: MonadCancelThrow: Trace](
         channelCodec.decoder.decode(payload).orThrow[F]
       }
 
-  override def notify(messages: List[EmailMessage.Id]): F[Unit] = database.pool.use { s =>
+  override def notify(messages: NonEmptyList[EmailMessage.Id]): F[Unit] = database.pool.use { s =>
     for
       k <- Trace[F].kernel
       _ <- notify(s, messages, k)

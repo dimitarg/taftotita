@@ -9,8 +9,8 @@ import java.time.OffsetDateTime
 
 trait EmailMessageRepo[F[_]]:
 
-  def scheduleMessages(messages: NonEmptyList[EmailMessage]): F[List[EmailMessage.Id]]
-  def claim(ids: List[EmailMessage.Id]): F[List[(EmailMessage.Id, EmailMessage)]]
+  def scheduleMessages(messages: NonEmptyList[EmailMessage]): F[NonEmptyList[EmailMessage.Id]]
+  def claim(ids: NonEmptyList[EmailMessage.Id]): F[List[(EmailMessage.Id, EmailMessage)]]
   def markAsSent(id: EmailMessage.Id): F[Boolean]
   def markAsError(id: EmailMessage.Id, error: String): F[Boolean]
 
@@ -19,4 +19,4 @@ trait EmailMessageRepo[F[_]]:
   def getClaimedIds(claimedAtOrBefore: OffsetDateTime): F[List[EmailMessage.Id]]
 
   def listen: Stream[F, TraceableMessage[NonEmptyList[EmailMessage.Id]]]
-  def notify(ids: List[EmailMessage.Id]): F[Unit]
+  def notify(ids: NonEmptyList[EmailMessage.Id]): F[Unit]

@@ -66,7 +66,7 @@ object CommsServiceDuplicationTest:
                 ids <- commsService.scheduleEmails(messages)
                 sentEmails <- emailSender.waitForIdleAndGetEmails(5.seconds)
               yield expect(sentEmails.size === testCase.messageSize) `and`
-                expect(sentEmails.map { (id, _) => id }.toSet === ids.toSet)
+                expect(sentEmails.map { (id, _) => id }.toSet === ids.toList.toSet)
             }
           yield result
         }

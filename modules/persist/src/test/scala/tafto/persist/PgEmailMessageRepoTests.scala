@@ -51,7 +51,7 @@ object PgEmailMessageRepoTests:
                 ids <- messageRepo.scheduleMessages(messages)
                 chunk <- handle.flatMap(_.embedError)
                 broadcastIds = chunk.payload
-              yield expect(broadcastIds.toList.toSet === ids.toSet)
+              yield expect(broadcastIds.toList.toSet === ids.toList.toSet)
             }
           yield result
         },
@@ -62,7 +62,7 @@ object PgEmailMessageRepoTests:
             testMessage <- emailMessageGen.sampleIO
             id <- insertMessage(messageRepo)(testMessage)
             (claimedIds, claimedMessages) <- messageRepo
-              .claim(List(id))
+              .claim(NonEmptyList.one(id))
               .map(_.separate)
             (messageFromDb, status) <- getMessage(messageRepo)(id)
           yield expect(claimedMessages === List(testMessage)) `and`
@@ -82,7 +82,7 @@ object PgEmailMessageRepoTests:
               .traverse { id =>
                 getMessage(messageRepo)(id)
               }
-              .map(_.separate)
+              .map(_.toList.separate)
           yield expect(claimedMessages === testMessages.toList) `and`
             expect(claimedMessages === messagesFromDb.toList) `and`
             expect(statuses.toSet === Set(EmailStatus.Claimed))
@@ -93,8 +93,8 @@ object PgEmailMessageRepoTests:
             messageRepo = PgEmailMessageRepo(db, channelId, channelCodec)
             testMessage <- emailMessageGen.sampleIO
             id <- insertMessage(messageRepo)(testMessage)
-            _ <- messageRepo.claim(List(id))
-            claimedTwice <- messageRepo.claim(List(id))
+            _ <- messageRepo.claim(NonEmptyList.one(id))
+            claimedTwice <- messageRepo.claim(NonEmptyList.one(id))
             (messageFromDb, status) <- getMessage(messageRepo)(id)
           yield expect(claimedTwice === List.empty) `and`
             expect(messageFromDb === testMessage) `and`
@@ -106,7 +106,7 @@ object PgEmailMessageRepoTests:
             messageRepo = PgEmailMessageRepo(db, channelId, channelCodec)
             testMessage <- emailMessageGen.sampleIO
             id <- insertMessage(messageRepo)(testMessage)
-            _ <- messageRepo.claim(List(id))
+            _ <- messageRepo.claim(NonEmptyList.one(id))
             marked <- messageRepo.markAsSent(id)
             (_, status) <- getMessage(messageRepo)(id)
           yield expect(marked === true) `and` expect(status === EmailStatus.Sent)
@@ -129,7 +129,7 @@ object PgEmailMessageRepoTests:
             insertedIds <- messageRepo.scheduleMessages(msgs)
             now <- Time[IO].utc
             scheduledIds <- messageRepo.getScheduledIds(now)
-          yield expect(insertedIds.toSet.subsetOf(scheduledIds.toSet))
+          yield expect(insertedIds.toList.toSet.subsetOf(scheduledIds.toSet))
         }
       )
     )
@@ -137,8 +137,8 @@ object PgEmailMessageRepoTests:
   def insertMessage(repo: EmailMessageRepo[IO])(message: EmailMessage): IO[EmailMessage.Id] = for
     ids <- repo.scheduleMessages(NonEmptyList.one(message))
     id <- ids match
-      case List(x) => x.pure[IO]
-      case xs      => failure(s"expected single message, got $xs").failFast[IO] >> IO.never
+      case NonEmptyList(h, Nil) => h.pure[IO]
+      case xs                   => failure(s"expected single message, got $xs").failFast[IO] >> IO.never
   yield id
 
   def getMessage(repo: EmailMessageRepo[IO])(id: EmailMessage.Id): IO[(EmailMessage, EmailStatus)] = for

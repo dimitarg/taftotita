@@ -19,7 +19,7 @@ trait CommsService[F[_]]:
   /** Delivery semantics - eventual at-least-once delivery. That is to say, if the effect executes successfully, the
     * email will have been scheduled for delivery, in a persistent way that would survive across i.e. service restart.
     */
-  def scheduleEmails(messages: NonEmptyList[EmailMessage]): F[List[EmailMessage.Id]]
+  def scheduleEmails(messages: NonEmptyList[EmailMessage]): F[NonEmptyList[EmailMessage.Id]]
 
   def run: Stream[F, Unit]
 
@@ -39,18 +39,18 @@ object CommsService:
   ): CommsService[F] =
     new CommsService[F]:
 
-      override def scheduleEmails(messages: NonEmptyList[EmailMessage]): F[List[EmailMessage.Id]] =
+      override def scheduleEmails(messages: NonEmptyList[EmailMessage]): F[NonEmptyList[EmailMessage.Id]] =
         emailMessageRepo.scheduleMessages(messages)
 
       override def run: Stream[F, Unit] =
         emailMessageRepo.listen
-          .flatMap(messages => Stream.evalSeq(processMessages(messages.payload.toList)))
+          .flatMap(messages => Stream.evalSeq(processMessages(messages.payload)))
           .evalMap(traceAndLog)
           .onFinalize {
             Logger[F].info("Exiting email consumer stream.")
           }
 
-      private def processMessages(messageIds: List[EmailMessage.Id]): F[List[MessageProcessingResult]] =
+      private def processMessages(messageIds: NonEmptyList[EmailMessage.Id]): F[List[MessageProcessingResult]] =
         TraceRoot[F].inRootSpan("processChunk") {
           for
             _ <- Trace[F].put("payload.size" -> messageIds.size)
@@ -92,7 +92,7 @@ object CommsService:
             now <- Time[F].utc
             scheduledIds <- emailMessageRepo
               .getScheduledIds(now.minusNanos(pollingConfig.forScheduled.messageAge.toNanos))
-            _ <- emailMessageRepo.notify(scheduledIds)
+            _ <- NonEmptyList.fromList(scheduledIds).traverse_(emailMessageRepo.notify)
           yield ()
         }
 
@@ -106,7 +106,7 @@ object CommsService:
         }
 
       private def reprocessClaimedMessage(id: EmailMessage.Id): F[MessageProcessingResult] =
-        TraceRoot[F].inRootSpan("processChunk") {
+        TraceRoot[F].inRootSpan("reprocessClaimedMessage") {
           for
             msg <- emailMessageRepo.getMessage(id)
             result <- msg.fold {

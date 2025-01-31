@@ -73,7 +73,7 @@ object CommsServiceTest:
                 msg <- emailMessageGen.sampleIO
                 scheduledIds <- commsService.scheduleEmails(NonEmptyList.one(msg))
                 _ <- awaitFinished.flatMap(_.embedError)
-                dbEmails <- scheduledIds.traverse(emailMessageRepo.getMessage).map(_.flatten)
+                dbEmails <- scheduledIds.traverse(emailMessageRepo.getMessage).map(_.toList.flatten)
               yield expect(dbEmails === List((msg, EmailStatus.Error)))
             }
           yield result
@@ -102,10 +102,10 @@ object CommsServiceTest:
                 streamResult <- awaitFinished
                 sent <- emailSender.getEmails
                 (sentIds, sentEmails) = sent.separate
-                dbEmails <- ids.traverse(emailMessageRepo.getMessage).map(_.flatten)
+                dbEmails <- ids.traverse(emailMessageRepo.getMessage).map(_.toList.flatten)
               yield expect(dbEmails === msgs.map { x => (x, EmailStatus.Sent) }.toList) `and`
                 expect(sentEmails === msgs.toList) `and`
-                expect(sentIds === ids)
+                expect(sentIds === ids.toList)
             }
           yield success
         },
@@ -117,7 +117,7 @@ object CommsServiceTest:
             tempEmailMessageRepo = PgEmailMessageRepo(db, chanId, channelCodec)
             ids <- tempEmailMessageRepo.scheduleMessages(msgs)
 
-            (id1, id2, id3, id4) <- safeMatch(ids) { case w :: x :: y :: z :: Nil =>
+            (id1, id2, id3, id4) <- safeMatch(ids.toList) { case w :: x :: y :: z :: Nil =>
               (w, x, y, z)
             } { xs =>
               s"expected four elements, got $xs"
@@ -172,7 +172,7 @@ object CommsServiceTest:
                 liveIds <- commsService.scheduleEmails(msgs)
                 sent <- emailSender.waitForIdleAndGetEmails(5.seconds)
                 (sentIds, _) = sent.separate
-              yield expect(sentIds.toSet === (backfillIds ++ liveIds).toSet)
+              yield expect(sentIds.toSet === (backfillIds.toList ++ liveIds.toList).toSet)
             }
           yield success
         },
@@ -192,11 +192,11 @@ object CommsServiceTest:
                 msg <- emailMessageGen.sampleIO
                 scheduledIds <- commsService.scheduleEmails(NonEmptyList.one(msg))
                 _ <- awaitFinished.flatMap(_.embedError)
-                dbEmails <- scheduledIds.traverse(emailMessageRepo.getMessage).map(_.flatten)
+                dbEmails <- scheduledIds.traverse(emailMessageRepo.getMessage).map(_.toList.flatten)
                 (sentIds, sentEmails) <- emailSender.underlying.getEmails.map(_.separate)
               yield expect(dbEmails === List((msg, EmailStatus.Sent))) `and`
                 expect(sentEmails === List(msg)) `and`
-                expect(sentIds === scheduledIds)
+                expect(sentIds === scheduledIds.toList)
             }
           yield result
         }
