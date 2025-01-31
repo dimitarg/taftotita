@@ -52,3 +52,7 @@ package object tracing:
       config <- Resource.eval(HoneycombConfig.load(serviceName, globalFields).load[F])
       result <- honeycombEntryPoint[F](config)
     yield result
+
+  given traceRootTrace[F[_]](using root: TraceRoot[F]): Trace[F] = root.trace
+  given traceRootEp[F[_]](using root: TraceRoot[F]): EntryPoint[F] = root.ep
+  given traceRootLocal[F[_]](using root: TraceRoot[F]): Local[F, Span[F]] = root.local

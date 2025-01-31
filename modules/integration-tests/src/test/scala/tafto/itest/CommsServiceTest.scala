@@ -22,6 +22,7 @@ import tafto.service.util.Retry
 import tafto.testutil.Generators.*
 import tafto.testutil.tracing.*
 import tafto.util.*
+import tafto.util.tracing.TraceRoot
 import weaver.pure.*
 
 import java.time.*
@@ -29,12 +30,13 @@ import scala.concurrent.duration.*
 
 object CommsServiceTest:
 
-  given noOpLocal: Local[IO, Span[IO]] = noOpSpanLocal
   def tests(db: Database[IO], channelGen: ChannelIdGenerator[IO])(using
       logger: Logger[IO],
       trace: Trace[IO],
       entryPoint: EntryPoint[IO]
   ): Stream[IO, Test] =
+    given noOpLocal: Local[IO, Span[IO]] = noOpSpanLocal
+    given traceRoot: TraceRoot[IO] = TraceRoot.make[IO]
     seqSuite(
       List(
         test("Scheduling an email persists and eventually sends email") {

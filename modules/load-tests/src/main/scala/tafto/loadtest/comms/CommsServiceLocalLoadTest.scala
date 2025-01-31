@@ -69,11 +69,13 @@ object CommsServiceLocalLoadTest extends IOApp.Simple:
 
       commsService =
         given EntryPoint[TracedIO] = commsEp
+        given TraceRoot[TracedIO] = TraceRoot.make
         val emailRepo = PgEmailMessageRepo(commsDb, channelId, channelCodec)
         CommsService(emailRepo, new NoOpEmailSender[TracedIO], PollingConfig.default)
 
       testCommsService =
         given EntryPoint[TracedIO] = testEp.mapK(Kleisli.liftK)
+        given TraceRoot[TracedIO] = TraceRoot.make
         val testEmailRepo = PgEmailMessageRepo(testDb, channelId, channelCodec)
         CommsService(testEmailRepo, new NoOpEmailSender[TracedIO], PollingConfig.default)
     yield TestResources(

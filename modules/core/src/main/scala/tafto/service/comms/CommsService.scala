@@ -4,16 +4,15 @@ import cats.Parallel
 import cats.data.NonEmptyList
 import cats.effect.*
 import cats.implicits.*
-import cats.mtl.Local
 import fs2.Stream
 import io.odin.Logger
-import natchez.{EntryPoint, Span, Trace}
+import natchez.Trace
 import tafto.domain.*
 import tafto.util.Time
+import tafto.util.tracing.*
 import tafto.util.tracing.given
-import tafto.util.tracing.{SpanLocal, span}
 
-import scala.concurrent.duration.*
+import scala.concurrent.duration.{span as _, *}
 
 trait CommsService[F[_]]:
 
@@ -33,7 +32,7 @@ trait CommsService[F[_]]:
       .concurrently(run)
 
 object CommsService:
-  def apply[F[_]: Temporal: Parallel: Logger: Trace: EntryPoint: SpanLocal](
+  def apply[F[_]: Temporal: Parallel: Logger: TraceRoot](
       emailMessageRepo: EmailMessageRepo[F],
       emailSender: EmailSender[F],
       pollingConfig: PollingConfig
@@ -52,10 +51,10 @@ object CommsService:
               // continuing the producer span in the consumer creates traces that are unusably large in the honeycomb UI
               // TODO upgrade skunk to use otel4s
               // TODO experiment with creating a span link instead
-              summon[EntryPoint[F]].root("processChunk").use { root =>
-                val result = Trace[F].put("payload.size" -> xs.size) >>
+              TraceRoot[F].inRootSpan("processChunk") {
+                Trace[F].put("payload.size" -> xs.size) >>
                   xs.parTraverse(processMessage)
-                Local[F, Span[F]].scope(result)(root)
+                // Local[F, Span[F]].scope(result)(root)
               }
             }
           )
@@ -117,8 +116,8 @@ object CommsService:
         }
 
       private def reprocessClaimedMessage(id: EmailMessage.Id): F[MessageProcessingResult] =
-        summon[EntryPoint[F]].root("processChunk").use { root =>
-          val result = for
+        TraceRoot[F].inRootSpan("processChunk") {
+          for
             msg <- emailMessageRepo.getMessage(id)
             result <- msg.fold {
               MessageProcessingResult.CannotReprocess_NotFound(id).pure[F]
@@ -127,7 +126,6 @@ object CommsService:
               else MessageProcessingResult.CannotReprocess_NoLongerClaimed(id, status).pure[F]
             }
           yield result
-          Local[F, Span[F]].scope(result)(root)
         }
 
       private def traceAndLog(x: MessageProcessingResult): F[Unit] = for
@@ -147,7 +145,7 @@ object CommsService:
             Trace[F].put("processing.result.type" -> "CannotReprocess_NotFound") >>
               Logger[F].error(s"Message $id due to be reprocessed was not found!")
           case MessageProcessingResult.CannotReprocess_NoLongerClaimed(id, newStatus) =>
-            Trace[F].put("processing.result.type" -> "CannotReprocess_NotFound") >>
+            Trace[F].put("processing.result.type" -> "CannotReprocess_NoLongerClaimed") >>
               Trace[F].put("processing.result.newStatus" -> newStatus.toString()) >>
               Logger[F].debug(
                 s"Message $id due to be reprocessed is no longer claimed, new status is $newStatus, skipping."

@@ -18,13 +18,12 @@ import tafto.service.comms.CommsService.PollingConfig
 import tafto.testutil.Generators.*
 import tafto.testutil.tracing.noOpSpanLocal
 import tafto.util.*
+import tafto.util.tracing.TraceRoot
 import weaver.pure.*
 
 import scala.concurrent.duration.*
 
 object CommsServiceDuplicationTest:
-
-  given noOpLocal: Local[IO, Span[IO]] = noOpSpanLocal
 
   final case class TestCase(
       messageSize: Int :| Positive,
@@ -42,6 +41,8 @@ object CommsServiceDuplicationTest:
       trace: Trace[IO],
       entryPoint: EntryPoint[IO]
   ): Stream[IO, Test] =
+    given noOpLocal: Local[IO, Span[IO]] = noOpSpanLocal
+    given traceRoot: TraceRoot[IO] = TraceRoot.make[IO]
     seqSuite(
       testCases.map { testCase =>
         test(

@@ -9,7 +9,7 @@ final case class HoneycombConfig(
 )
 
 object HoneycombConfig:
-  def load(serviceName: String, globalFields: Map[String, ?]) =
+  def load(serviceName: String, globalFields: Map[String, ?]): ConfigValue[Effect, HoneycombConfig] =
     env("HONEYCOMB_API_KEY").secret.map { apiKey =>
       HoneycombConfig(apiKey, serviceName, globalFields)
     }
