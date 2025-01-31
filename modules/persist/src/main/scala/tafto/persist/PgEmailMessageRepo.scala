@@ -4,7 +4,7 @@ import cats.MonadThrow
 import cats.data.NonEmptyList
 import cats.effect.kernel.MonadCancelThrow
 import cats.implicits.*
-import fs2.{Chunk, Stream}
+import fs2.Stream
 import io.github.iltotore.iron.autoRefine
 import natchez.*
 import skunk.Session
@@ -25,8 +25,8 @@ final case class PgEmailMessageRepo[F[_]: Time: MonadCancelThrow: Trace](
     database: Database[F],
     channelId: Identifier,
     channelCodec: StringCodec[
-      TraceableMessage[List[EmailMessage.Id]],
-      TraceableMessage[Chunk[EmailMessage.Id]]
+      TraceableMessage[NonEmptyList[EmailMessage.Id]],
+      TraceableMessage[NonEmptyList[EmailMessage.Id]]
     ]
 ) extends EmailMessageRepo[F]:
   override def scheduleMessages(messages: NonEmptyList[EmailMessage]): F[List[EmailMessage.Id]] =
@@ -52,10 +52,10 @@ final case class PgEmailMessageRepo[F[_]: Time: MonadCancelThrow: Trace](
     span("notify")("payload.size" -> ids.size) {
       val channel = s.channel(channelId)
       ids.grouped(notifyBatchSize).toList.traverse_ { xs =>
-        val message = TraceableMessage(k.toHeaders, xs)
-        channel.notify(
-          channelCodec.encoder.encode(message)
-        )
+        NonEmptyList.fromList(xs).traverse_ { nel =>
+          val message = TraceableMessage(k.toHeaders, nel)
+          channel.notify(channelCodec.encoder.encode(message))
+        }
       }
     }
 
@@ -79,17 +79,25 @@ final case class PgEmailMessageRepo[F[_]: Time: MonadCancelThrow: Trace](
     }
   }
 
-  override def claim(id: EmailMessage.Id): F[Option[EmailMessage]] =
-    span("claim")("id" -> id) {
+  override def claim(ids: List[EmailMessage.Id]): F[List[(EmailMessage.Id, EmailMessage)]] =
+    span("claim")("payload.size" -> ids.size) {
       Time[F].utc.flatMap { now =>
-        updateStatusReturning(UpdateStatus.claim(id, now))
+        val updateStatus = UpdateStatus.claim(now)
+        database.transact { s =>
+          val inputBatches = ids.grouped(Database.batchSize).toList
+          inputBatches
+            .traverse { xs =>
+              s.execute(EmailMessageQueries.updateStatusesReturning(xs.size))(xs, updateStatus)
+            }
+            .map(_.flatten)
+        }
       }
     }
 
   override def markAsSent(id: EmailMessage.Id): F[Boolean] =
     span("markAsSent")("id" -> id) {
       Time[F].utc.flatMap { now =>
-        updateStatus(UpdateStatus.markAsSent(id, now))
+        updateStatus(id, UpdateStatus.markAsSent(now))
       }
     }
 
@@ -100,28 +108,20 @@ final case class PgEmailMessageRepo[F[_]: Time: MonadCancelThrow: Trace](
         result <- database.pool.use { s =>
           for
             command <- s.prepare(EmailMessageQueries.updateStatusAndError)
-            completion <- command.execute((UpdateStatus.markAsError(id, now), error))
+            completion <- command.execute((id, UpdateStatus.markAsError(now), error))
             result = wasUpdated(completion)
           yield result
         }
       yield result
     }
 
-  private def updateStatus(updateStatus: UpdateStatus): F[Boolean] = for result <- database.pool.use { s =>
-      val command = EmailMessageQueries.updateStatusSimple(updateStatus)
-      for
-        completion <- s.execute(command)
-        result = wasUpdated(completion)
-      yield result
-    }
-  yield result
-
-  private def updateStatusReturning(updateStatus: UpdateStatus): F[Option[EmailMessage]] =
-    for
-      now <- Time[F].utc
-      query = EmailMessageQueries.updateStatusReturningSimple(updateStatus)
-      result <- database.pool.use { s =>
-        s.option(query)
+  private def updateStatus(id: EmailMessage.Id, updateStatus: UpdateStatus): F[Boolean] =
+    for result <- database.pool.use { s =>
+        val command = EmailMessageQueries.updateStatusSimple(id, updateStatus)
+        for
+          completion <- s.execute(command)
+          result = wasUpdated(completion)
+        yield result
       }
     yield result
 
@@ -129,7 +129,7 @@ final case class PgEmailMessageRepo[F[_]: Time: MonadCancelThrow: Trace](
     case Completion.Update(count) if count > 0 => true
     case _                                     => false
 
-  override val listen: Stream[F, TraceableMessage[Chunk[EmailMessage.Id]]] =
+  override val listen: Stream[F, TraceableMessage[NonEmptyList[EmailMessage.Id]]] =
     database
       .subscribeToChannel(channelId)
       .evalMap { notification =>
@@ -185,13 +185,13 @@ object EmailMessageQueries:
     from ids
     where m.id = ids.id;
   """
-    .contramap[UpdateStatus] { x =>
-      (x.id, x.currentStatus, x.newStatus, x.updatedAt)
+    .contramap[(EmailMessage.Id, UpdateStatus)] { (id, status) =>
+      (id, status.currentStatus, status.newStatus, status.updatedAt)
     }
 
-  def updateStatusSimple(x: UpdateStatus) =
+  def updateStatusSimple(id: EmailMessage.Id, x: UpdateStatus) =
     updateStatusFr
-      .unsafeInterpolate(x)(
+      .unsafeInterpolate((id, x))(
         shouldQuote = List(false, true, true, true)
       )
       .command
@@ -204,53 +204,43 @@ object EmailMessageQueries:
     update email_messages m set status=${emailStatus}, updated_at=${timestamptz}, error=${text}
     from ids
     where m.id = ids.id;
-  """.command.contramap[(UpdateStatus, String)] { (updateStatus, errorMessage) =>
-    (updateStatus.id, updateStatus.currentStatus, updateStatus.newStatus, updateStatus.updatedAt, errorMessage)
+  """.command.contramap[(EmailMessage.Id, UpdateStatus, String)] { (id, updateStatus, errorMessage) =>
+    (id, updateStatus.currentStatus, updateStatus.newStatus, updateStatus.updatedAt, errorMessage)
   }
 
-  val updateStatusReturningFr = sql"""
+  def updateStatusesReturning(n: Int) = sql"""
     with ids as (
-      select id from email_messages where id=${emailMessageId} and status=${emailStatus}
+      select id from email_messages where id in (${emailMessageId.list(n)}) and status=${emailStatus}
       for update skip locked
     )
     update email_messages m set status=${emailStatus}, updated_at=${timestamptz}
     from ids
     where m.id = ids.id
-    returning subject, to_, cc, bcc, body;
+    returning m.id, m.subject, m.to_, m.cc, m.bcc, m.body;
   """
-    .contramap[UpdateStatus] { x =>
-      (x.id, x.currentStatus, x.newStatus, x.updatedAt)
+    .contramap[(List[EmailMessage.Id], UpdateStatus)] { (xs, x) =>
+      (xs, x.currentStatus, x.newStatus, x.updatedAt)
     }
-
-  def updateStatusReturningSimple(x: UpdateStatus) =
-    updateStatusReturningFr
-      .unsafeInterpolate(x)(
-        shouldQuote = List(false, true, true, true)
-      )
-      .query(domainEmailMessageCodec)
+    .query(emailMessageId ~ domainEmailMessageCodec)
 
 final case class UpdateStatus private (
-    id: EmailMessage.Id,
     currentStatus: EmailStatus,
     newStatus: EmailStatus,
     updatedAt: OffsetDateTime
 )
 
 object UpdateStatus:
-  def claim(id: EmailMessage.Id, updatedAt: OffsetDateTime) = UpdateStatus(
-    id = id,
+  def claim(updatedAt: OffsetDateTime) = UpdateStatus(
     currentStatus = EmailStatus.Scheduled,
     newStatus = EmailStatus.Claimed,
     updatedAt = updatedAt
   )
-  def markAsSent(id: EmailMessage.Id, updatedAt: OffsetDateTime) = UpdateStatus(
-    id = id,
+  def markAsSent(updatedAt: OffsetDateTime) = UpdateStatus(
     currentStatus = EmailStatus.Claimed,
     newStatus = EmailStatus.Sent,
     updatedAt = updatedAt
   )
-  def markAsError(id: EmailMessage.Id, updatedAt: OffsetDateTime) = UpdateStatus(
-    id = id,
+  def markAsError(updatedAt: OffsetDateTime) = UpdateStatus(
     currentStatus = EmailStatus.Claimed,
     newStatus = EmailStatus.Error,
     updatedAt = updatedAt

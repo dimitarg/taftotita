@@ -44,36 +44,26 @@ object CommsService:
 
       override def run: Stream[F, Unit] =
         emailMessageRepo.listen
-          .flatMap(msg =>
-            val xs = msg.payload
-            Stream.evalUnChunk {
-              // summon[EntryPoint[F]].continueOrElseRoot("processChunk", Kernel(msg.kernel)).use { root =>
-              // continuing the producer span in the consumer creates traces that are unusably large in the honeycomb UI
-              // TODO upgrade skunk to use otel4s
-              // TODO experiment with creating a span link instead
-              TraceRoot[F].inRootSpan("processChunk") {
-                Trace[F].put("payload.size" -> xs.size) >>
-                  xs.parTraverse(processMessage)
-                // Local[F, Span[F]].scope(result)(root)
-              }
-            }
-          )
+          .flatMap(messages => Stream.evalSeq(processMessages(messages.payload.toList)))
           .evalMap(traceAndLog)
           .onFinalize {
             Logger[F].info("Exiting email consumer stream.")
           }
 
-      private def processMessage(id: EmailMessage.Id): F[MessageProcessingResult] =
-        span("processMessage")("id" -> id) {
+      private def processMessages(messageIds: List[EmailMessage.Id]): F[List[MessageProcessingResult]] =
+        TraceRoot[F].inRootSpan("processChunk") {
           for
-            _ <- Logger[F].debug(s"Processing message $id.")
-            maybeMessage <- emailMessageRepo.claim(id)
-            result <- maybeMessage match
-              case None =>
-                MessageProcessingResult.CouldNotClaim(id).pure[F]
-              case Some(message) =>
-                processClaimedMessage(id, message)
-          yield result
+            _ <- Trace[F].put("payload.size" -> messageIds.size)
+            claimedMessages <- emailMessageRepo.claim(messageIds)
+            claimedIds = claimedMessages.map { case (id, _) => id }.toSet
+            notClaimed: List[MessageProcessingResult] = messageIds
+              .filterNot(claimedIds.contains)
+              .map(MessageProcessingResult.CouldNotClaim.apply)
+            results <- claimedMessages.parTraverse { (id, message) =>
+              processClaimedMessage(id, message)
+            }
+            _ <- Trace[F].put("result.size" -> results.size)
+          yield notClaimed ++ results
         }
 
       private def processClaimedMessage(id: EmailMessage.Id, message: EmailMessage): F[MessageProcessingResult] =

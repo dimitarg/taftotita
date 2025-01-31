@@ -36,16 +36,10 @@ object Generators:
   )
 
   def nelOfSize[A](n: Int :| Positive)(gen: Gen[A]): Gen[NonEmptyList[A]] =
-    Gen.listOfN(n, gen).flatMap { xs =>
-      NonEmptyList
-        .fromList(xs)
-        .fold {
-          // unreachable
-          Gen.fail
-        } { nel =>
-          Gen.const(nel)
-        }
-    }
+    Gen.listOfN(n, gen).flatMap(nelOrFail)
+
+  def nelOrFail[A](xs: List[A]): Gen[NonEmptyList[A]] =
+    NonEmptyList.fromList(xs).fold(Gen.fail)(Gen.const)
 
   val emailIdGen: Gen[EmailMessage.Id] =
     Gen.long.map(x => EmailMessage.Id.apply(x))

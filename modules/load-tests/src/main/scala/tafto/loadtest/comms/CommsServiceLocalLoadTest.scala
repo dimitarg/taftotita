@@ -154,7 +154,7 @@ object CommsServiceLocalLoadTest extends IOApp.Simple:
           .default(32),
         env("TEST_POOL_SIZE")
           .as[Int :| Positive]
-          .default(32)
+          .default(10)
       ).mapN { (poolSize, testPoolSize) =>
         TestConfig(
           poolSize = poolSize,

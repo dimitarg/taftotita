@@ -1,7 +1,7 @@
 package tafto.json
 
+import cats.data.NonEmptyList
 import cats.implicits.*
-import fs2.Chunk
 import io.circe.Printer.noSpaces
 import io.circe.parser.decode
 import io.circe.{Decoder, Encoder}
@@ -16,10 +16,10 @@ object JsonStringCodecs:
 
   def stringDecoderFromJson[A: Decoder]: StringDecoder[A] = x => decode[A](x).leftMap(_.toString())
 
-  val traceableMessageIdsEncoder: StringEncoder[TraceableMessage[List[EmailMessage.Id]]] =
+  val traceableMessageIdsEncoder: StringEncoder[TraceableMessage[NonEmptyList[EmailMessage.Id]]] =
     stringEncoderFromJson
 
-  val traceableMessageIdsDecoder: StringDecoder[TraceableMessage[Chunk[EmailMessage.Id]]] =
+  val traceableMessageIdsDecoder: StringDecoder[TraceableMessage[NonEmptyList[EmailMessage.Id]]] =
     stringDecoderFromJson
 
   val traceableMessageIdsStringCodec = StringCodec(traceableMessageIdsEncoder, traceableMessageIdsDecoder)

@@ -5,6 +5,7 @@ import cats.effect.*
 import cats.implicits.*
 import fs2.Stream
 import io.github.iltotore.iron.autoRefine
+import io.github.iltotore.iron.cats.given
 import natchez.Trace
 import tafto.domain.*
 import tafto.persist.testutil.{ChannelCodecs as codecs, ChannelIdGenerator}
@@ -60,11 +61,31 @@ object PgEmailMessageRepoTests:
             messageRepo = PgEmailMessageRepo(db, channelId, channelCodec)
             testMessage <- emailMessageGen.sampleIO
             id <- insertMessage(messageRepo)(testMessage)
-            claimed <- messageRepo.claim(id)
+            (claimedIds, claimedMessages) <- messageRepo
+              .claim(List(id))
+              .map(_.separate)
             (messageFromDb, status) <- getMessage(messageRepo)(id)
-          yield expect(claimed === testMessage.some) `and`
-            expect(claimed === messageFromDb.some) `and`
+          yield expect(claimedMessages === List(testMessage)) `and`
+            expect(claimedMessages === List(messageFromDb)) `and`
             expect(status === EmailStatus.Claimed)
+        },
+        test("PgEmailMessageRepo.claim can claim a list of messages") {
+          for
+            channelId <- channelGen.next
+            messageRepo = PgEmailMessageRepo(db, channelId, channelCodec)
+            testMessages <- nelOfSize(10)(emailMessageGen).sampleIO
+            ids <- messageRepo.scheduleMessages(testMessages)
+            (claimedIds, claimedMessages) <- messageRepo
+              .claim(ids)
+              .map(_.separate)
+            (messagesFromDb, statuses) <- ids
+              .traverse { id =>
+                getMessage(messageRepo)(id)
+              }
+              .map(_.separate)
+          yield expect(claimedMessages === testMessages.toList) `and`
+            expect(claimedMessages === messagesFromDb.toList) `and`
+            expect(statuses.toSet === Set(EmailStatus.Claimed))
         },
         test("PgEmailMessageRepo.claim cannot claim a message once it's claimed") {
           for
@@ -72,10 +93,10 @@ object PgEmailMessageRepoTests:
             messageRepo = PgEmailMessageRepo(db, channelId, channelCodec)
             testMessage <- emailMessageGen.sampleIO
             id <- insertMessage(messageRepo)(testMessage)
-            _ <- messageRepo.claim(id)
-            claimedTwice <- messageRepo.claim(id)
+            _ <- messageRepo.claim(List(id))
+            claimedTwice <- messageRepo.claim(List(id))
             (messageFromDb, status) <- getMessage(messageRepo)(id)
-          yield expect(claimedTwice === None) `and`
+          yield expect(claimedTwice === List.empty) `and`
             expect(messageFromDb === testMessage) `and`
             expect(status === EmailStatus.Claimed)
         },
@@ -85,7 +106,7 @@ object PgEmailMessageRepoTests:
             messageRepo = PgEmailMessageRepo(db, channelId, channelCodec)
             testMessage <- emailMessageGen.sampleIO
             id <- insertMessage(messageRepo)(testMessage)
-            _ <- messageRepo.claim(id)
+            _ <- messageRepo.claim(List(id))
             marked <- messageRepo.markAsSent(id)
             (_, status) <- getMessage(messageRepo)(id)
           yield expect(marked === true) `and` expect(status === EmailStatus.Sent)

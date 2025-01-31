@@ -25,7 +25,7 @@ object EmailMessageIdCodecsTests extends Suite with Checkers:
           .fill(n = maxSupportedMessages)(elem = Long.MaxValue)
           .map(x => EmailMessage.Id.apply(x))
 
-        val gen = traceableMessageGen(Gen.const(messageIds))
+        val gen = traceableMessageGen(Gen.const(messageIds).flatMap(nelOrFail))
 
         forall(gen) { message =>
           val encoded = codec.encoder.encode(message)
@@ -35,10 +35,10 @@ object EmailMessageIdCodecsTests extends Suite with Checkers:
         }
       },
       test("Roundtrip") {
-        val gen = traceableMessageGen(Gen.listOf(emailIdGen))
+        val gen = traceableMessageGen(Gen.nonEmptyListOf(emailIdGen).flatMap(nelOrFail))
         forall(gen) { message =>
           codec.decoder.decode(codec.encoder.encode(message)).orThrow[IO].map { decoded =>
-            expect(decoded.map(_.toList) === message)
+            expect(decoded === message)
           }
         }
       }
