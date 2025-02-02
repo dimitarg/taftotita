@@ -19,4 +19,4 @@ enum MessageProcessingResult(val id: EmailMessage.Id):
   // message from claimed messages reprocessing backlog no longer has status claimed. This is not an error as it might
   // have been reprocessed by another process
   case CannotReprocess_NoLongerClaimed(override val id: EmailMessage.Id, newStatus: EmailStatus)
-      extends MessageProcessingResult(id)
+    extends MessageProcessingResult(id)

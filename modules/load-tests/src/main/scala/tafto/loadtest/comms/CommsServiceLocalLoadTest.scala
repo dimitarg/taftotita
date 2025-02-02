@@ -29,7 +29,7 @@ import tafto.util.tracing.*
 object CommsServiceLocalLoadTest extends IOApp.Simple:
 
   val warmupSize = 500
-  val testSize = 5000
+  val testSize = 20000
 
   given logger: Logger[TracedIO] = defaultLogger
   given ioLogger: Logger[IO] = defaultLogger

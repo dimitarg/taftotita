@@ -2,6 +2,7 @@ package tafto.service.util
 
 import cats.Applicative
 import cats.effect.Temporal
+import cats.effect.std.Random
 import io.github.iltotore.iron.*
 import io.github.iltotore.iron.constraint.numeric.*
 import io.odin.Logger
@@ -10,13 +11,15 @@ import retry.*
 import scala.concurrent.duration.*
 
 object Retry:
-  def fullJitter[F[_]: Applicative](
+  def fullJitter[F[_]: Applicative: Random](
       maxRetries: Int :| Positive,
       baseDelay: FiniteDuration
-  ) = RetryPolicies.limitRetries[F](maxRetries) `join` RetryPolicies.fullJitter(baseDelay)
+  ): RetryPolicy[F, Any] = RetryPolicies.limitRetries[F](maxRetries) `join` RetryPolicies.fullJitter(baseDelay)
 
-  def retrying[F[_]: Temporal: Logger, A](policy: RetryPolicy[F])(fa: F[A]): F[A] =
-    retryingOnAllErrors[A](
+  def retrying[F[_]: Temporal: Logger, A](policy: RetryPolicy[F, Throwable])(fa: F[A]): F[A] =
+    retryingOnErrors[F, A](fa)(
       policy = policy,
-      onError = (error: Throwable, _: RetryDetails) => Logger[F].warn(error.getMessage(), error)
-    )(fa)
+      errorHandler =  ResultHandler.retryOnAllErrors {
+        (error: Throwable, _: RetryDetails) => Logger[F].warn(error.getMessage(), error)
+      }
+    )

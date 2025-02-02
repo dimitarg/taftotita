@@ -10,5 +10,5 @@ trait EmailSender[F[_]]:
   def sendEmail(id: EmailMessage.Id, email: EmailMessage): F[Unit]
 
 object EmailSender:
-  def retrying[F[_]: Temporal: Logger](policy: RetryPolicy[F])(underying: EmailSender[F]): EmailSender[F] =
+  def retrying[F[_]: Temporal: Logger](policy: RetryPolicy[F, Throwable])(underying: EmailSender[F]): EmailSender[F] =
     (id, email) => Retry.retrying(policy)(underying.sendEmail(id, email))

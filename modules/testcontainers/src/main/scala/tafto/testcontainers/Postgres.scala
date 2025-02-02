@@ -45,7 +45,7 @@ object Postgres:
               }
 
             dataBind.foreach { bind =>
-              c.addFileSystemBind(bind.hostPath.toString, bind.containerPath.toString, BindMode.READ_WRITE)
+              c.withFileSystemBind(bind.hostPath.toString, bind.containerPath.toString, BindMode.READ_WRITE)
               // the default strategy waits for the string "database system is ready to accept connections" to be logged TWICE.
               // this is only true when the PG system is initialising the first time, but not on subsequent attempts, when data already exists.
               if !bind.isNewlyCreated then

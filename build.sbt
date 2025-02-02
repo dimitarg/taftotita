@@ -2,12 +2,12 @@ ThisBuild / organization := "io.github.dimitarg"
 ThisBuild / version      := "0.1.0-SNAPSHOT"
 ThisBuild / scalaVersion := "3.3.4"
 
-val testcontainersScalaVersion = "0.41.4"
+val testcontainersScalaVersion = "0.41.8"
 val ironVersion = "2.6.0"
 val http4sVersion = "0.23.30"
-val tapirVersion = "1.11.10"
+val tapirVersion = "1.11.13"
 val monocleVersion = "3.3.0"
-val natchezVersion = "0.3.5"
+val natchezVersion = "0.3.7"
 val circeVersion = "0.14.10"
 
 def module(name: String): Project = Project(id = s"tafto-${name}",  base = file(s"modules/$name"))
@@ -51,7 +51,7 @@ lazy val core = module("core")
       // we depend on ciris in core because domain data types reuse `Secret` datatype.
       "io.github.iltotore" %% "iron-ciris" % ironVersion,
       "is.cir" %% "ciris" % "3.7.0",
-      "com.github.cb372" %% "cats-retry" % "3.1.3",
+      "com.github.cb372" %% "cats-retry" % "4.0.0",
       "dev.optics" %% "monocle-core"  % monocleVersion,
       "dev.optics" %% "monocle-macro" % monocleVersion,
       "org.tpolecat" %% "natchez-core" % natchezVersion,
@@ -68,8 +68,8 @@ lazy val migrations = module("migrations")
   .dependsOn(config)
   .settings(
     libraryDependencies ++= Seq(
-      "org.flywaydb" % "flyway-database-postgresql" % "11.1.0",
-      "org.postgresql" % "postgresql" % "42.7.4"
+      "org.flywaydb" % "flyway-database-postgresql" % "11.3.0",
+      "org.postgresql" % "postgresql" % "42.7.5"
     )
   )
 
@@ -94,7 +94,7 @@ lazy val restApi = module("rest-api")
       "com.softwaremill.sttp.tapir" %% "tapir-core" % tapirVersion,
       "com.softwaremill.sttp.tapir" %% "tapir-json-circe" % tapirVersion,
       "com.softwaremill.sttp.tapir" %% "tapir-openapi-docs" % tapirVersion,
-      "com.softwaremill.sttp.apispec" %% "openapi-circe-yaml" % "0.11.3",
+      "com.softwaremill.sttp.apispec" %% "openapi-circe-yaml" % "0.11.7",
       "io.github.iltotore" %% "iron-circe" % ironVersion,
       "com.softwaremill.sttp.tapir" %% "tapir-iron" % tapirVersion
     )

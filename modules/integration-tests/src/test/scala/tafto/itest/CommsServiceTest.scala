@@ -27,6 +27,7 @@ import weaver.pure.*
 
 import java.time.*
 import scala.concurrent.duration.*
+import cats.effect.std.Random
 
 object CommsServiceTest:
 
@@ -181,6 +182,7 @@ object CommsServiceTest:
             chanId <- channelGen.next
             emailSender <- FlakyEmailSender.make[IO](timesToFail = 2)
             emailMessageRepo = PgEmailMessageRepo(db, chanId, channelCodec)
+            given Random[IO] <- Random.scalaUtilRandom[IO]
             retryPolicy = Retry.fullJitter[IO](maxRetries = 3, baseDelay = 2.millis)
             commsService = CommsService(
               emailMessageRepo,
