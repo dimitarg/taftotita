@@ -1,1 +1,1 @@
-An industry-grade exploration in Scala 3,
+See https://dimitarg.github.io/joys-of-messaging
