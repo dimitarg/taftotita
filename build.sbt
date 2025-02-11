@@ -5,12 +5,12 @@ ThisBuild / scalaVersion := "3.3.4"
 val testcontainersScalaVersion = "0.41.8"
 val ironVersion = "2.6.0"
 val http4sVersion = "0.23.30"
-val tapirVersion = "1.11.13"
+val tapirVersion = "1.11.14"
 val monocleVersion = "3.3.0"
 val circeVersion = "0.14.10"
 
 val otel4sVersion = "0.11.2"
-val openTelemetryVersion = "1.46.0"
+val openTelemetryVersion = "1.47.0"
 
 val otelRuntime = Seq(
   "io.opentelemetry" % "opentelemetry-exporter-otlp" % openTelemetryVersion % Runtime,
@@ -73,11 +73,12 @@ lazy val migrations = module("migrations")
   .dependsOn(config)
   .settings(
     libraryDependencies ++= Seq(
-      "org.flywaydb" % "flyway-database-postgresql" % "11.3.0",
+      "org.flywaydb" % "flyway-database-postgresql" % "11.3.1",
       "org.postgresql" % "postgresql" % "42.7.5"
     )
   )
 
+// iron-skunk depends on 0.x non-milestone, override that.
 ThisBuild / libraryDependencySchemes += "org.tpolecat" %% "skunk-core" % VersionScheme.Always
 
 lazy val persist = module("persist")
