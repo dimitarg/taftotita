@@ -2,25 +2,25 @@ package tafto.util
 
 import cats.implicits.*
 import cats.{Eq, Functor, Show}
-import natchez.Trace
-import org.typelevel.ci.CIString
+import org.typelevel.otel4s.trace.Tracer
+import tafto.util.tracing.getTraceContext
 
 final case class TraceableMessage[A](
-    kernel: Map[CIString, String],
+    traceContext: Map[String, String],
     payload: A
 ):
-  def map[B](f: A => B): TraceableMessage[B] = TraceableMessage(kernel, f(payload))
+  def map[B](f: A => B): TraceableMessage[B] = TraceableMessage(traceContext, f(payload))
 
 object TraceableMessage:
-  def make[F[_]: Trace: Functor, A](payload: A): F[TraceableMessage[A]] =
-    Trace[F].kernel.map { kernel =>
-      TraceableMessage(kernel.toHeaders, payload)
+  def make[F[_]: Tracer: Functor, A](payload: A): F[TraceableMessage[A]] =
+    getTraceContext[F].map { ctx =>
+      TraceableMessage(ctx, payload)
     }
 
   given show[A: Show]: Show[TraceableMessage[A]] = Show.show { x =>
-    show"TraceableMessage(kernel: ${x.kernel}, payload: ${x.payload})"
+    show"TraceableMessage(kernel: ${x.traceContext}, payload: ${x.payload})"
   }
 
   given eq[A: Eq]: Eq[TraceableMessage[A]] = Eq.instance { (x, y) =>
-    x.kernel === y.kernel && x.payload === y.payload
+    x.traceContext === y.traceContext && x.payload === y.payload
   }

@@ -2,12 +2,11 @@ package tafto.itest
 
 import cats.effect.*
 import cats.implicits.*
-import cats.mtl.Local
 import fs2.{io as _, *}
 import io.github.iltotore.iron.constraint.numeric.Positive
 import io.github.iltotore.iron.{cats as _, *}
 import io.odin.Logger
-import natchez.{EntryPoint, Span, Trace}
+import org.typelevel.otel4s.trace.Tracer
 import tafto.domain.*
 import tafto.itest.util.*
 import tafto.json.JsonStringCodecs.traceableMessageIdsStringCodec as channelCodec
@@ -16,9 +15,7 @@ import tafto.persist.testutil.ChannelIdGenerator
 import tafto.service.comms.CommsService
 import tafto.service.comms.CommsService.PollingConfig
 import tafto.testutil.Generators.*
-import tafto.testutil.tracing.noOpSpanLocal
 import tafto.util.*
-import tafto.util.tracing.TraceRoot
 import weaver.pure.*
 
 import scala.concurrent.duration.*
@@ -38,11 +35,8 @@ object CommsServiceDuplicationTest:
 
   def tests(db: Database[IO], channelGen: ChannelIdGenerator[IO])(using
       logger: Logger[IO],
-      trace: Trace[IO],
-      entryPoint: EntryPoint[IO]
+      tracer: Tracer[IO]
   ): Stream[IO, Test] =
-    given noOpLocal: Local[IO, Span[IO]] = noOpSpanLocal
-    given traceRoot: TraceRoot[IO] = TraceRoot.make[IO]
     seqSuite(
       testCases.map { testCase =>
         test(

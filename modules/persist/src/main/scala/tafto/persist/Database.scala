@@ -6,7 +6,7 @@ import cats.effect.std.Console
 import cats.implicits.*
 import fs2.Stream
 import fs2.io.net.Network
-import natchez.Trace
+import org.typelevel.otel4s.trace.Tracer
 import skunk.*
 import skunk.data.{Identifier, Notification}
 import tafto.config.DatabaseConfig
@@ -34,7 +34,7 @@ object Database:
   // this is up to ~80MB memory under the default PG configuration (each message cannot exceed 8000 bytes)
   val notificationQueueSize = 10000
 
-  def make[F[_]: Temporal: Trace: Network: Console](config: DatabaseConfig): Resource[F, Database[F]] =
+  def make[F[_]: Temporal: Tracer: Network: Console](config: DatabaseConfig): Resource[F, Database[F]] =
     Session
       .pooled[F](
         host = config.host.value,

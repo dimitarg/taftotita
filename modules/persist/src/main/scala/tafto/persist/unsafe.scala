@@ -18,8 +18,8 @@ object unsafe:
         case (((placeholder, shouldQuote), param), sql) =>
           val replacement = param match
             case None                   => "null"
-            case Some(x) if shouldQuote => quote(x)
-            case Some(x)                => x
+            case Some(x) if shouldQuote => quote(x.unredact.value)
+            case Some(x)                => x.unredact.value
           sql.replace(placeholder, replacement)
 
       }

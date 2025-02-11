@@ -3,7 +3,7 @@ package tafto.persist
 import cats.effect.*
 import cats.implicits.*
 import fs2.Stream
-import natchez.Trace
+import org.typelevel.otel4s.trace.Tracer
 import tafto.db.DatabaseMigrator
 import tafto.persist.testutil.ChannelIdGenerator
 import tafto.testcontainers.*
@@ -11,7 +11,7 @@ import weaver.pure.*
 
 object AllPersistIntegrationTests extends Suite:
 
-  given trace: Trace[IO] = Trace.Implicits.noop
+  given tracer: Tracer[IO] = Tracer.Implicits.noop
 
   val dbResource: Resource[IO, Database[IO]] = for
     containers <- Containers.make(ContainersConfig.test)

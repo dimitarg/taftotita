@@ -14,5 +14,7 @@ class TaftoLogger extends OdinLoggerServiceProvider[IO]:
   val loggers: PartialFunction[String, Logger[IO]] =
     case "some.external.package.SpecificClass" =>
       consoleLogger[IO](minLevel = Level.Warn) // disable noisy external logs
+    case x if x.startsWith("io.opentelemetry") =>
+      consoleLogger[IO](minLevel = Level.Debug)
     case _ => // if wildcard case isn't provided, default logger is no-op
       consoleLogger[IO](minLevel = Level.Info)

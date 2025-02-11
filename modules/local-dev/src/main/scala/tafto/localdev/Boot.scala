@@ -2,7 +2,7 @@ package tafto.localdev
 
 import cats.effect.*
 import io.odin.*
-import natchez.Trace.Implicits.noop
+import org.typelevel.otel4s.trace.Tracer
 import tafto.crypto.*
 import tafto.db.DatabaseMigrator
 import tafto.persist.*
@@ -14,6 +14,7 @@ object Boot extends IOApp.Simple:
     containers <- Containers.make(ContainersConfig.localDev)
     dbConfig = containers.postgres.databaseConfig
     _ <- Resource.eval(DatabaseMigrator.migrate[IO](dbConfig))
+    given Tracer[IO] = Tracer.noop[IO]
     database <- Database.make[IO](dbConfig)
     healthService = PgHealthService(database)
     passwordHasher = PasswordHasherImpl[IO]

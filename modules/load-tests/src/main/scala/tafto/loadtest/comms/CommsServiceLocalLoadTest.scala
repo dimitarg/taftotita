@@ -6,13 +6,13 @@ import cats.effect.{IO, IOApp, Resource}
 import cats.implicits.*
 import ciris.*
 import io.github.iltotore.iron.*
+import io.github.iltotore.iron.cats.given
 import io.github.iltotore.iron.ciris.given
 import io.github.iltotore.iron.constraint.numeric.Positive
 import io.odin.Logger
 import monocle.syntax.all.*
-import natchez.EntryPoint
-import natchez.mtl.given
-import natchez.noop.NoopSpan
+import org.typelevel.otel4s.oteljava.context.Context
+import org.typelevel.otel4s.trace.Tracer
 import tafto.db.DatabaseMigrator
 import tafto.domain.*
 import tafto.json.JsonStringCodecs.traceableMessageIdsStringCodec as channelCodec
@@ -24,7 +24,6 @@ import tafto.testcontainers.*
 import tafto.util.tracing.*
 
 // find more reliable way to measure max duration as opposed to sum of trace durations
-// consider xmx8g
 
 object CommsServiceLocalLoadTest extends IOApp.Simple:
 
@@ -41,49 +40,56 @@ object CommsServiceLocalLoadTest extends IOApp.Simple:
       config = containers.postgres.databaseConfig
       _ <- Resource.eval(DatabaseMigrator.migrate[TracedIO](config))
 
-      commsDb <- Database.make[TracedIO](config)
-      testDb <- Database.make[TracedIO](
-        config
-          .focus(_.poolSize)
-          .replace(testConfig.testPoolSize)
-      )
       testRunUUID <- Resource.eval(UUIDGen[TracedIO].randomUUID)
       tracingGlobalFields = Map(
         "test.uuid" -> testRunUUID.toString(),
-        "pool.size" -> testConfig.poolSize,
-        "test.pool.size" -> testConfig.testPoolSize
+        "pool.size" -> testConfig.poolSize.show,
+        "test.pool.size" -> testConfig.testPoolSize.show
       )
+      tracer <- mkHoneycombTracer(
+        serviceName = "tafto-comms",
+        globalFields = tracingGlobalFields
+      )
+
+      testTracer <- mkHoneycombTracer(
+        serviceName = "tafto-load-tests",
+        globalFields = tracingGlobalFields
+      )
+
+      channelId <- Resource.eval(PgEmailMessageRepo.defaultChannelId[TracedIO])
+
+      (commsDb, commsService) <-
+        given Tracer[TracedIO] = tracer
+        for
+          commsDb <- Database.make[TracedIO](config)
+          emailRepo = PgEmailMessageRepo(commsDb, channelId, channelCodec)
+          commsService = CommsService(emailRepo, new NoOpEmailSender[TracedIO], PollingConfig.default)
+        yield (commsDb, commsService)
+
+      (testDb, testCommsService) <-
+        given Tracer[TracedIO] = testTracer
+        for
+          commsDb <- Database.make[TracedIO](
+            config
+              .focus(_.poolSize)
+              .replace(testConfig.testPoolSize)
+          )
+          emailRepo = PgEmailMessageRepo(commsDb, channelId, channelCodec)
+          commsService = CommsService(emailRepo, new NoOpEmailSender[TracedIO], PollingConfig.default)
+        yield (commsDb, commsService)
+
       _ <- Resource.eval(
         Logger[TracedIO].info(s"Test run is $testRunUUID") >>
           Logger[TracedIO].info(
             s"Db pool size in effect is ${testConfig.poolSize}, test pool size in effect is ${testConfig.testPoolSize}"
           )
       )
-      commsEp <- honeycombEntryPoint[TracedIO](
-        serviceName = "tafto-comms",
-        globalFields = tracingGlobalFields
-      )
-      testEp <- honeycombEntryPoint[IO]("tafto-load-tests", globalFields = tracingGlobalFields).mapK(Kleisli.liftK)
-
-      channelId <- Resource.eval(PgEmailMessageRepo.defaultChannelId[TracedIO])
-
-      commsService =
-        given EntryPoint[TracedIO] = commsEp
-        given TraceRoot[TracedIO] = TraceRoot.make
-        val emailRepo = PgEmailMessageRepo(commsDb, channelId, channelCodec)
-        CommsService(emailRepo, new NoOpEmailSender[TracedIO], PollingConfig.default)
-
-      testCommsService =
-        given EntryPoint[TracedIO] = testEp.mapK(Kleisli.liftK)
-        given TraceRoot[TracedIO] = TraceRoot.make
-        val testEmailRepo = PgEmailMessageRepo(testDb, channelId, channelCodec)
-        CommsService(testEmailRepo, new NoOpEmailSender[TracedIO], PollingConfig.default)
     yield TestResources(
       commsService = commsService,
       commsDb = commsDb,
       testCommsService = testCommsService,
       testDb = testDb,
-      testEntryPoint = testEp
+      testTracer = testTracer
     )
 
   def publishTestMessages(testResources: TestResources): IO[Unit] =
@@ -98,29 +104,32 @@ object CommsServiceLocalLoadTest extends IOApp.Simple:
 
     val result = testResources.testCommsService.scheduleEmails(msgs)
 
-    testResources.testEntryPoint.root("scheduleTestMessages").use { span =>
-      result.run(span).void
-    }
+    testResources.testTracer
+      .rootSpan("scheduleTestMessages")
+      .surround(result)
+      .void
+      .run(Context.root)
 
-  def warmup(db: Database[TracedIO], name: String): IO[Unit] =
+  def warmup(db: Database[TracedIO], name: String)(using tracer: Tracer[TracedIO]): IO[Unit] =
     val healthService = PgHealthService(db)
-    val result = (1 to warmupSize).toList.parTraverse_(_ => healthService.getHealth)
 
-    for
-      _ <- Logger[IO].info(s"Warming up $name")
-      _ <- result.run(NoopSpan())
-      _ <- Logger[IO].info(s"Warmup finished: $name")
+    val result = for
+      _ <- Logger[TracedIO].info(s"Warming up $name")
+      _ <- (1 to warmupSize).toList.parTraverse_(_ => healthService.getHealth)
+      _ <- Logger[TracedIO].info(s"Warmup finished: $name")
     yield ()
+    // we don't need the warmups traced
+    tracer.noopScope(result).run(Context.root)
 
   override def run: IO[Unit] =
-    makeTestResources.mapK(withNoSpan).use { testResources =>
+    makeTestResources.mapK(runInRootContext).use { testResources =>
 
       val warmups = List(
-        warmup(testResources.commsDb, "comms service database pool"),
-        warmup(testResources.testDb, "test database pool")
+        warmup(testResources.commsDb, "comms service database pool")(using testResources.testTracer), // todo
+        warmup(testResources.testDb, "test database pool")(using testResources.testTracer)
       ).parSequence_
 
-      val test = testResources.commsService.backfillAndRun.compile.drain.run(NoopSpan()).background.use { handle =>
+      val test = testResources.commsService.backfillAndRun.compile.drain.run(Context.root).background.use { handle =>
         for
           _ <- Logger[IO].info("publishing test messages ...")
           _ <- publishTestMessages(testResources)
@@ -137,7 +146,7 @@ object CommsServiceLocalLoadTest extends IOApp.Simple:
       commsService: CommsService[TracedIO],
       testCommsService: CommsService[TracedIO],
       testDb: Database[TracedIO],
-      testEntryPoint: EntryPoint[IO]
+      testTracer: Tracer[TracedIO]
   )
 
   final case class TestConfig(

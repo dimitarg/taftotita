@@ -7,8 +7,15 @@ val ironVersion = "2.6.0"
 val http4sVersion = "0.23.30"
 val tapirVersion = "1.11.13"
 val monocleVersion = "3.3.0"
-val natchezVersion = "0.3.7"
 val circeVersion = "0.14.10"
+
+val otel4sVersion = "0.11.2"
+val openTelemetryVersion = "1.46.0"
+
+val otelRuntime = Seq(
+  "io.opentelemetry" % "opentelemetry-exporter-otlp" % openTelemetryVersion % Runtime,
+  "io.opentelemetry" % "opentelemetry-sdk-extension-autoconfigure" % openTelemetryVersion % Runtime
+)
 
 def module(name: String): Project = Project(id = s"tafto-${name}",  base = file(s"modules/$name"))
   .settings(
@@ -54,10 +61,8 @@ lazy val core = module("core")
       "com.github.cb372" %% "cats-retry" % "4.0.0",
       "dev.optics" %% "monocle-core"  % monocleVersion,
       "dev.optics" %% "monocle-macro" % monocleVersion,
-      "org.tpolecat" %% "natchez-core" % natchezVersion,
-      "org.tpolecat" %% "natchez-noop" % natchezVersion,
-      "org.tpolecat" %% "natchez-mtl" % natchezVersion,
-      "org.tpolecat" %% "natchez-honeycomb" % natchezVersion,
+      "org.typelevel" %% "otel4s-core" % otel4sVersion,
+      "org.typelevel" %% "otel4s-oteljava" % otel4sVersion,
     )
   )
 
@@ -73,6 +78,8 @@ lazy val migrations = module("migrations")
     )
   )
 
+ThisBuild / libraryDependencySchemes += "org.tpolecat" %% "skunk-core" % VersionScheme.Always
+
 lazy val persist = module("persist")
   .dependsOn(
     config,
@@ -82,7 +89,7 @@ lazy val persist = module("persist")
   )
   .settings(
     libraryDependencies ++= Seq(
-      "org.tpolecat" %% "skunk-core" % "0.6.4",
+      "org.tpolecat" %% "skunk-core" % "1.0.0-M10",
       "io.github.iltotore" %% "iron-skunk" % ironVersion,
     )
   )
@@ -134,9 +141,10 @@ lazy val integrationTests = module("integration-tests")
 lazy val loadTests = module("load-tests")
   .dependsOn(migrations, persist, testContainers, json)
   .settings(
+    libraryDependencies ++= otelRuntime,
     javaOptions ++= Seq(
-      "-Xms8g"
-    )
+      "-Xms8g",
+    ),
   )
 
 lazy val json = module("json")

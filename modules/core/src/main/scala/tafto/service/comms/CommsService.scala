@@ -6,11 +6,11 @@ import cats.effect.*
 import cats.implicits.*
 import fs2.Stream
 import io.odin.Logger
-import natchez.Trace
+import org.typelevel.otel4s.Attribute
+import org.typelevel.otel4s.trace.Tracer
 import tafto.domain.*
 import tafto.util.Time
 import tafto.util.tracing.*
-import tafto.util.tracing.given
 
 import scala.concurrent.duration.{span as _, *}
 
@@ -32,7 +32,7 @@ trait CommsService[F[_]]:
       .concurrently(run)
 
 object CommsService:
-  def apply[F[_]: Temporal: Parallel: Logger: TraceRoot](
+  def apply[F[_]: Temporal: Parallel: Logger: Tracer](
       emailMessageRepo: EmailMessageRepo[F],
       emailSender: EmailSender[F],
       pollingConfig: PollingConfig
@@ -51,9 +51,9 @@ object CommsService:
           }
 
       private def processMessages(messageIds: NonEmptyList[EmailMessage.Id]): F[List[MessageProcessingResult]] =
-        TraceRoot[F].inRootSpan("processChunk") {
+        Tracer[F].rootSpan("processChunk").surround {
           for
-            _ <- Trace[F].put("payload.size" -> messageIds.size)
+            _ <- Tracer[F].addAttribute(Attribute("payload.size", messageIds.size.toLong))
             claimedMessages <- emailMessageRepo.claim(messageIds)
             claimedIds = claimedMessages.map { case (id, _) => id }.toSet
             notClaimed: List[MessageProcessingResult] = messageIds
@@ -62,7 +62,7 @@ object CommsService:
             results <- claimedMessages.parTraverse { (id, message) =>
               processClaimedMessage(id, message)
             }
-            _ <- Trace[F].put("result.size" -> results.size)
+            _ <- Tracer[F].addAttribute(Attribute("result.size", results.size.toLong))
           yield notClaimed ++ results
         }
 
@@ -106,7 +106,7 @@ object CommsService:
         }
 
       private def reprocessClaimedMessage(id: EmailMessage.Id): F[MessageProcessingResult] =
-        TraceRoot[F].inRootSpan("reprocessClaimedMessage") {
+        Tracer[F].rootSpan("reprocessClaimedMessage").surround {
           for
             msg <- emailMessageRepo.getMessage(id)
             result <- msg.fold {
@@ -119,24 +119,24 @@ object CommsService:
         }
 
       private def traceAndLog(x: MessageProcessingResult): F[Unit] = for
-        _ <- Trace[F].put("id" -> x.id)
+        _ <- Tracer[F].addAttribute(Attribute("id", x.id.value))
         _ <- x match
           case MessageProcessingResult.CouldNotClaim(id) =>
-            Trace[F].put("processing.result.type" -> "CouldNotClaim") >>
+            Tracer[F].addAttribute(Attribute("processing.result.type", "CouldNotClaim")) >>
               Logger[F].debug(s"Could not claim message $id, it may have been claimed by another process.")
           case MessageProcessingResult.Marked(id, maybeError) =>
-            Trace[F].put("processing.result.type" -> "Marked") >>
+            Tracer[F].addAttribute(Attribute("processing.result.type", "Marked")) >>
               maybeError.traverse_(traceAndLogEmailError(id, _))
           case MessageProcessingResult.CouldNotMark(id, maybeError) =>
-            Trace[F].put("processing.result.type" -> "CouldNotMark") >>
+            Tracer[F].addAttribute(Attribute("processing.result.type", "CouldNotMark")) >>
               maybeError.traverse_(traceAndLogEmailError(id, _)) >>
               Logger[F].warn(s"Could not mark message $id as processed, possible duplicate delivery detected!")
           case MessageProcessingResult.CannotReprocess_NotFound(id) =>
-            Trace[F].put("processing.result.type" -> "CannotReprocess_NotFound") >>
+            Tracer[F].addAttribute(Attribute("processing.result.type", "CannotReprocess_NotFound")) >>
               Logger[F].error(s"Message $id due to be reprocessed was not found!")
           case MessageProcessingResult.CannotReprocess_NoLongerClaimed(id, newStatus) =>
-            Trace[F].put("processing.result.type" -> "CannotReprocess_NoLongerClaimed") >>
-              Trace[F].put("processing.result.newStatus" -> newStatus.toString()) >>
+            Tracer[F].addAttribute(Attribute("processing.result.type", "CannotReprocess_NoLongerClaimed")) >>
+              Tracer[F].addAttribute(Attribute("processing.result.newStatus", newStatus.toString())) >>
               Logger[F].debug(
                 s"Message $id due to be reprocessed is no longer claimed, new status is $newStatus, skipping."
               )
@@ -144,7 +144,7 @@ object CommsService:
 
       private def traceAndLogEmailError(id: EmailMessage.Id, error: Throwable): F[Unit] = for
         _ <- Logger[F].warn(s"Error sending email $id", error)
-        _ <- Trace[F].put("email.error" -> error.getMessage())
+        _ <- Tracer[F].addAttribute(Attribute("email.error", error.getMessage()))
       yield ()
 
   final case class PollingConfig(

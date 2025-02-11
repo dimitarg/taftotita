@@ -2,15 +2,15 @@ package tafto.itest
 
 import cats.data.NonEmptyList
 import cats.effect.*
+import cats.effect.std.Random
 import cats.implicits.*
-import cats.mtl.Local
 import fs2.{io as _, *}
 import io.github.iltotore.iron.cats.given
 import io.github.iltotore.iron.constraint.numeric.*
 import io.github.iltotore.iron.{cats as _, *}
 import io.odin.Logger
 import monocle.syntax.all.*
-import natchez.{EntryPoint, Span, Trace}
+import org.typelevel.otel4s.trace.Tracer
 import tafto.domain.*
 import tafto.itest.util.*
 import tafto.json.JsonStringCodecs.traceableMessageIdsStringCodec as channelCodec
@@ -20,24 +20,18 @@ import tafto.service.comms.CommsService.PollingConfig
 import tafto.service.comms.{CommsService, EmailSender}
 import tafto.service.util.Retry
 import tafto.testutil.Generators.*
-import tafto.testutil.tracing.*
 import tafto.util.*
-import tafto.util.tracing.TraceRoot
 import weaver.pure.*
 
 import java.time.*
 import scala.concurrent.duration.*
-import cats.effect.std.Random
 
 object CommsServiceTest:
 
   def tests(db: Database[IO], channelGen: ChannelIdGenerator[IO])(using
       logger: Logger[IO],
-      trace: Trace[IO],
-      entryPoint: EntryPoint[IO]
+      tracer: Tracer[IO]
   ): Stream[IO, Test] =
-    given noOpLocal: Local[IO, Span[IO]] = noOpSpanLocal
-    given traceRoot: TraceRoot[IO] = TraceRoot.make[IO]
     seqSuite(
       List(
         test("Scheduling an email persists and eventually sends email") {

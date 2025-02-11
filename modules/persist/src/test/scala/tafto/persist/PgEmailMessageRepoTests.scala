@@ -6,7 +6,7 @@ import cats.implicits.*
 import fs2.Stream
 import io.github.iltotore.iron.autoRefine
 import io.github.iltotore.iron.cats.given
-import natchez.Trace
+import org.typelevel.otel4s.trace.Tracer
 import tafto.domain.*
 import tafto.persist.testutil.{ChannelCodecs as codecs, ChannelIdGenerator}
 import tafto.service.comms.EmailMessageRepo
@@ -17,7 +17,7 @@ import weaver.pure.*
 object PgEmailMessageRepoTests:
 
   def tests(db: Database[IO], channelGen: ChannelIdGenerator[IO])(using
-      trace: Trace[IO]
+      tracer: Tracer[IO]
   ): Stream[IO, Test] =
     val channelCodec = codecs.simple
     parSuite(
@@ -70,10 +70,11 @@ object PgEmailMessageRepoTests:
             expect(status === EmailStatus.Claimed)
         },
         test("PgEmailMessageRepo.claim can claim a list of messages") {
+          inline val testSize = 10
           for
             channelId <- channelGen.next
             messageRepo = PgEmailMessageRepo(db, channelId, channelCodec)
-            testMessages <- nelOfSize(10)(emailMessageGen).sampleIO
+            testMessages <- nelOfSize(testSize)(emailMessageGen).sampleIO
             ids <- messageRepo.scheduleMessages(testMessages)
             (claimedIds, claimedMessages) <- messageRepo
               .claim(ids)
@@ -83,7 +84,8 @@ object PgEmailMessageRepoTests:
                 getMessage(messageRepo)(id)
               }
               .map(_.toList.separate)
-          yield expect(claimedMessages === testMessages.toList) `and`
+          yield expect(claimedMessages.size === testSize) `and`
+            expect(claimedMessages === testMessages.toList) `and`
             expect(claimedMessages === messagesFromDb.toList) `and`
             expect(statuses.toSet === Set(EmailStatus.Claimed))
         },

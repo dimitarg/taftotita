@@ -19,7 +19,7 @@ object Retry:
   def retrying[F[_]: Temporal: Logger, A](policy: RetryPolicy[F, Throwable])(fa: F[A]): F[A] =
     retryingOnErrors[F, A](fa)(
       policy = policy,
-      errorHandler =  ResultHandler.retryOnAllErrors {
-        (error: Throwable, _: RetryDetails) => Logger[F].warn(error.getMessage(), error)
+      errorHandler = ResultHandler.retryOnAllErrors { (error: Throwable, _: RetryDetails) =>
+        Logger[F].warn(error.getMessage(), error)
       }
     )

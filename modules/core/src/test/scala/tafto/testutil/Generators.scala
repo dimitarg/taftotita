@@ -5,7 +5,6 @@ import cats.effect.*
 import io.github.iltotore.iron.*
 import io.github.iltotore.iron.constraint.numeric.Positive
 import org.scalacheck.Gen
-import org.typelevel.ci.*
 import tafto.domain.{Email, EmailMessage}
 import tafto.util.{NonEmpty, TraceableMessage}
 
@@ -44,16 +43,15 @@ object Generators:
   val emailIdGen: Gen[EmailMessage.Id] =
     Gen.long.map(x => EmailMessage.Id.apply(x))
 
-  private val traceIdHeader = ci"X-Natchez-Trace-Id"
-  private val spanIdHeader = ci"X-Natchez-Parent-Span-Id"
+  private val traceparentHeader = "traceparent"
 
-  val kernelGen: Gen[Map[CIString, String]] = for
-    traceId <- Gen.uuid
-    spanId <- Gen.uuid
-  yield Map(
-    traceIdHeader -> traceId.toString(),
-    spanIdHeader -> spanId.toString()
-  )
+  // FIXME make this a real gen
+  val kernelGen: Gen[Map[String, String]] =
+    Gen.const(
+      Map(
+        traceparentHeader -> "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
+      )
+    )
 
   def traceableMessageGen[A](payloadGen: Gen[A]): Gen[TraceableMessage[A]] = for
     kernel <- kernelGen

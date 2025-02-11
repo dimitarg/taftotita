@@ -4,8 +4,7 @@ import cats.effect.*
 import cats.implicits.*
 import fs2.Stream
 import io.odin.Logger
-import natchez.noop.NoopEntrypoint
-import natchez.{EntryPoint, Trace}
+import org.typelevel.otel4s.trace.Tracer
 import tafto.db.DatabaseMigrator
 import tafto.log.defaultLogger
 import tafto.persist.Database
@@ -15,9 +14,8 @@ import weaver.pure.*
 
 object AllIntegrationTests extends Suite:
 
-  given trace: Trace[IO] = Trace.Implicits.noop
   given logger: Logger[IO] = defaultLogger
-  given ep: EntryPoint[IO] = NoopEntrypoint[IO]()
+  given tracer: Tracer[IO] = Tracer.Implicits.noop
 
   val dbResource: Resource[IO, Database[IO]] = for
     containers <- Containers.make(ContainersConfig.test)
