@@ -30,6 +30,7 @@ object AllIntegrationTests extends Suite:
     Stream.resource((dbResource, channelIdGen).tupled).flatMap { (db, channelGen) =>
       // Resource-heavy suites that should be run in sequence before others
       CommsServiceDuplicationTest.tests(db, channelGen) ++
+        CommsServiceCancellationTest.tests(db, channelGen) ++
         // Suites to run in parallel
         Stream(
           CommsServiceTest.tests(db, channelGen)

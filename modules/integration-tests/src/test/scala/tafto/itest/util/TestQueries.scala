@@ -12,3 +12,11 @@ object TestQueries:
   val updateMessageStatus = sql"""
     update email_messages set status = ${emailStatus} where id = ${emailMessageId}
   """.command
+
+  def getMessageStatuses(size: Int) = sql"""
+   select id, status from email_messages where id in (${emailMessageId.list(size)})
+  """.query(emailMessageId ~ emailStatus)
+
+  def deleteAllMessages = sql"""
+    delete from email_messages;
+  """.command

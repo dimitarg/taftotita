@@ -77,7 +77,6 @@ object CommsServiceLocalLoadTest extends IOApp.Simple:
           emailRepo = PgEmailMessageRepo(commsDb, channelId, channelCodec)
           commsService = CommsService(emailRepo, new NoOpEmailSender[TracedIO], PollingConfig.default)
         yield (commsDb, commsService)
-
       _ <- Resource.eval(
         Logger[TracedIO].info(s"Test run is $testRunUUID") >>
           Logger[TracedIO].info(
