@@ -3,6 +3,7 @@ package tafto.service.comms
 import cats.Parallel
 import cats.data.NonEmptyList
 import cats.effect.*
+import cats.effect.implicits.*
 import cats.implicits.*
 import fs2.Stream
 import io.odin.Logger
@@ -67,10 +68,10 @@ object CommsService:
         }
 
       private def processClaimedMessage(id: EmailMessage.Id, message: EmailMessage): F[MessageProcessingResult] =
-        for
+        (for
           sendEmailResult <- emailSender.sendEmail(id, message).attempt
           result <- sendEmailResult.fold(markAsError(id, _), _ => markAsSent(id))
-        yield result
+        yield result).uncancelable
 
       private def markAsSent(id: EmailMessage.Id): F[MessageProcessingResult] =
         emailMessageRepo

@@ -15,6 +15,7 @@ import tafto.persist.testutil.ChannelIdGenerator
 import tafto.persist.{Database, PgEmailMessageRepo}
 import tafto.service.comms.CommsService
 import tafto.service.comms.CommsService.PollingConfig
+import tafto.testutil.*
 import tafto.testutil.Generators.*
 import weaver.pure.*
 
@@ -40,7 +41,7 @@ object CommsServiceCancellationTest:
       tracer: Tracer[IO]
   ): Stream[IO, Test] = seqSuite(
     List.range(1, suiteSize + 1).map { x =>
-      test(s"Comms service drains in-flight messages on cancellation (attempt $x)") {
+      test(s"Comms service finishes processing in-flight messages on cancellation (attempt $x)") {
         for
           chanId <- channelGen.next
           emailSender <- RefBackedEmailSender.make[IO]
@@ -64,12 +65,12 @@ object CommsServiceCancellationTest:
           dbIdsAndStatuses <- getStatuses(db)(sentIds)
           (dbIds, dbStatuses) = dbIdsAndStatuses.separate
           dbStatusSet = dbStatuses.toSet
-          _ <- IO.println(s"sent ${sentIds.size} emails")
-          _ <- IO.println(s"sent email status set: ${dbStatusSet}")
+          _ <- logger.info(s"sent ${sentIds.size} emails")
+          _ <- logger.info(s"sent email status set: ${dbStatusSet}")
         yield expect(sentIds.toSet === dbIds.toSet) `and`
           expect(dbStatusSet.contains(EmailStatus.Scheduled) === false) `and`
           expect(dbStatusSet.contains(EmailStatus.Claimed) === false)
-      }.guarantee(deleteAllMessages(db))
+      }.logDuration.guarantee(deleteAllMessages(db))
     }
   )
 
