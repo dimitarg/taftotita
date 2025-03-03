@@ -58,6 +58,8 @@ object Dist:
     )
   )
 
+  def never[A]: Dist[A] = Dist(List())
+
   def uniform[A](xs: List[A]): Dist[A] =
     val p = Probability(1.0 / xs.size.toDouble)
     Dist(xs.map(x => x -> p))
