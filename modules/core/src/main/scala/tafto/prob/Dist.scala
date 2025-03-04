@@ -64,6 +64,32 @@ object Dist:
     val p = Probability(1.0 / xs.size.toDouble)
     Dist(xs.map(x => x -> p))
 
+  private def sumP[A](xs: List[(A, Probability)]): Probability = Probability(xs.map(_._2.p).sum)
+
+  // scales a dist so the sum of probabilities is 1
+  def scale[A](xs: List[(A, Probability)]): Dist[A] =
+    val q = sumP(xs)
+    Dist(xs.map { (a, p) => (a, Probability(p.p / q.p)) })
+
+  // shape :: (Float -> Float) -> Spread a
+  // shape _ [] = impossible
+  // shape f xs = scale (zip xs ps)
+  // where incr = 1 / fromIntegral ((length xs) - 1)
+  // ps = map f (iterate (+incr) 0)
+  def shape[A](f: Double => Double)(xs: List[A]): Dist[A] = xs match
+    case Nil => never
+    case _ =>
+      val len = xs.length
+      val incr = 1 / (len - 1).toDouble
+      val ps = List
+        .iterate(0.0, len)(_ + incr)
+        .map(f)
+        .map(Probability(_))
+      scale(xs.zip(ps))
+
+  def normal[A](xs: List[A]): Dist[A] =
+    shape(normalCurve(mean = 0.5, stdDev = 0.5))(xs)
+
   // uniformly select one element, returned along the unselected elements
   def selectOne[A: Eq](xs: List[A]): Dist[(A, List[A])] =
     Dist.uniform(xs).map { x =>
@@ -111,3 +137,5 @@ object Dist:
       case Right(b)    => pure(b)
       case Left(nextA) => tailRecM(nextA)(f)
     }
+
+  given distOrd[A: Eq]: Eq[Dist[A]] = Eq.instance((x, y) => x.dist === y.dist)
